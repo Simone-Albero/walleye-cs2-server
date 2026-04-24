@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block page_title %}Dashboard{% endblock %}
+{% block page_sub %}Live container status — auto-refreshes every 5 s{% endblock %}
+
+{% block content %}
+<div id="dash-app">
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-val">{{ services.length }}</div>
+      <div class="kpi-label">Services</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">{{ services.filter(s => s.status === 'running').length }}</div>
+      <div class="kpi-label">Running</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">{{ services.filter(s => s.status !== 'running' && s.status !== 'loading').length }}</div>
+      <div class="kpi-label">Issues</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val text-mono">{{ lastUpdated || '—' }}</div>
+      <div class="kpi-label">Last Update</div>
+    </div>
+  </div>
+
+  <div class="cards-grid">
+    <div v-for="s in services" :key="s.name" class="card">
+      <div class="card-header">
+        <span class="card-title">{{ s.name }}</span>
+        <span class="badge" :class="badgeClass(s.status)">{{ s.status }}</span>
+      </div>
+
+      <div v-if="s.status === 'running'" class="metric-block">
+        <div class="metric-row">
+          <span class="metric-label">CPU</span>
+          <span class="metric-value text-mono">
+            {{ s.cpu_pct != null ? s.cpu_pct + '%' : '—' }}
+          </span>
+        </div>
+        <div class="progress-wrap">
+          <div
+            class="progress-bar"
+            :class="{ warn: s.cpu_pct > 80 }"
+            :style="{ width: (s.cpu_pct || 0) + '%' }">
+          </div>
+        </div>
+      </div>
+
+      <div class="card-metrics">
+        <div class="metric">
+          <span class="metric-label">RAM</span>
+          <span class="metric-value">{{ ramLabel(s) }}</span>
+        </div>
+
+        <div v-if="s.uptime" class="metric">
+          <span class="metric-label">Uptime</span>
+          <span class="metric-value">{{ s.uptime }}</span>
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <button
+          class="btn btn-sm btn-danger"
+          :disabled="restarting === s.name"
+          @click="restart(s.name)">
+          <span v-if="restarting === s.name" class="spinner"></span>
+          <span v-else>↺</span>
+          Restart
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-card mt-3">
+    <div class="section-card-header">
+      <span>System Status</span>
+    </div>
+    <div class="section-card-body">
+      <p class="text-muted">
+        Last updated:
+        <span class="text-mono">{{ lastUpdated || '—' }}</span>
+      </p>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const { createApp, ref, onMounted, onUnmounted } = Vue;
+
+createApp({
+  setup() {
+    const NAMES = ['cs2-server', 'cs2-scorer', 'cs2-web', 'cs2-admin'];
+    const services = ref(
+      NAMES.map(n => ({
+        name: n,
+        status: 'loading',
+        cpu_pct: null,
+        ram_mb: null,
+        ram_limit_mb: null
+      }))
+    );
+    const restarting = ref(null);
+    const lastUpdated = ref('');
+    let timer = null;
+
+    async function loadStatus() {
+      const { ok, data } = await apiFetch('/api/status');
+      if (!ok) return;
+      services.value = NAMES.map(n => ({ name: n, ...data[n] }));
+      lastUpdated.value = new Date().toLocaleTimeString();
+    }
+
+    async function restart(name) {
+      restarting.value = name;
+      const { ok, data } = await apiFetch('/api/restart/' + name, 'POST');
+      toast(ok ? name + ' restarted.' : (data.error || 'Error'), ok);
+      restarting.value = null;
+      await loadStatus();
+    }
+
+    function badgeClass(status) {
+      if (status === 'running') return 'badge-up';
+      if (status === 'loading') return 'badge-unknown';
+      return 'badge-down';
+    }
+
+    function ramLabel(s) {
+      if (s.ram_mb == null) return '—';
+      const used = s.ram_mb + ' MB';
+      return s.ram_limit_mb ? used + ' / ' + s.ram_limit_mb + ' MB' : used;
+    }
+
+    onMounted(() => {
+      loadStatus();
+      timer = setInterval(loadStatus, 5000);
+    });
+
+    onUnmounted(() => clearInterval(timer));
+
+    return { services, restarting, lastUpdated, restart, badgeClass, ramLabel };
+  }
+}).mount('#dash-app');
+</script>
+{% endblock %}

@@ -1,0 +1,106 @@
+# Project name — used as prefix for the default network.
+# External volumes keep their explicit names and are unaffected by this.
+name: walleye-cs2
+
+services:
+
+  # ── 1. Download CS2 (runs once, exits 0 when done) ────────────────────────
+  cs2-base:
+    build: ./cs2_base_image
+    # This exact image name is referenced in cs2_main_image/Dockerfile FROM clause.
+    image: base-cs2-image
+    container_name: cs2-base
+    restart: no
+    volumes:
+      - steamcmd_volume:/home/steam/steamcmd
+      - steamcmd_login_volume:/home/steam/Steam
+
+  # ── 2. CS2 server + WallEyeServer plugin ──────────────────────────────────
+  cs2-server:
+    build: ./cs2_main_image
+    image: walleye/cs2-server:latest
+    container_name: cs2-server
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+    depends_on:
+      # Wait for the one-shot download container to complete successfully
+      # before starting the game server.
+      cs2-base:
+        condition: service_completed_successfully
+    network_mode: "host"
+    volumes:
+      - steamcmd_volume:/home/steam/steamcmd
+      - steamcmd_login_volume:/home/steam/Steam
+      - ./data:/data
+      - ./config.json:/config/config.json:ro
+
+  # ── 3. Scoring service ─────────────────────────────────────────────────────
+  # Independent from cs2-server: it reacts to filesystem events on /data,
+  # not to the server process being alive.
+  scoring-service:
+    build: ./scoring-service
+    image: walleye/scorer:latest
+    container_name: cs2-scorer
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+      - ./config.json:/config/config.json:ro
+    healthcheck:
+      # Verify the watchdog process (PID 1) is still alive.
+      test: ["CMD-SHELL", "test -d /proc/1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── 4. Web leaderboard ─────────────────────────────────────────────────────
+  web-leaderboard:
+    build: ./web-leaderboard
+    image: walleye/web:latest
+    container_name: cs2-web
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+      - ./config.json:/config/config.json:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/api/leaderboard', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ── 5. Admin panel ─────────────────────────────────────────────────────────
+  admin-panel:
+    build: ./admin-panel
+    image: walleye/admin:latest
+    container_name: cs2-admin
+    restart: unless-stopped
+    # Root is required to access /var/run/docker.sock and restart containers.
+    user: root
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/data
+      - ./config.json:/config/config.json:rw
+      - ./admin-auth.json:/config/admin-auth.json:ro
+      - ./cs2_main_image/admins.conf:/admins/admins.conf:rw
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "python", "-c",
+            "import urllib.request; urllib.request.urlopen('http://localhost:8081/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  steamcmd_volume:
+    external: true
+    name: walleye-cs2-server_steamcmd_volume
+  steamcmd_login_volume:
+    external: true
+    name: walleye-cs2-server_steamcmd_login_volume

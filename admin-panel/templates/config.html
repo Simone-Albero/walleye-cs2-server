@@ -1,0 +1,332 @@
+{% extends "base.html" %}
+{% block title %}Config{% endblock %}
+
+{% block page_title %}Configuration{% endblock %}
+{% block page_sub %}Saved to <code>config.json</code> — triggers restart of cs2-server, cs2-scorer and cs2-web{% endblock %}
+
+{% block content %}
+<div id="cfg-app">
+  <form @submit.prevent="save">
+
+    <div class="section-card">
+      <div class="section-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="m9 12 2 2 4-4"/>
+        </svg>
+        <span class="section-card-title">Match</span>
+      </div>
+
+      <div class="section-card-body">
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label">Required Players (1–20)</label>
+            <input type="number" v-model.number="cfg.match.required_players" min="1" max="20">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Wallhack Duration (sec)</label>
+            <input type="number" v-model.number="cfg.match.wallhack_duration_seconds" min="10">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Report Phase Duration (sec)</label>
+            <input type="number" v-model.number="cfg.match.report_phase_duration_seconds" min="5">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Restart Delay (sec)</label>
+            <input type="number" v-model.number="cfg.match.restart_delay_seconds" min="0">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Leaderboard Display (sec)</label>
+            <input type="number" v-model.number="cfg.match.leaderboard_display_seconds" min="0">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Map</label>
+            <select v-model="cfg.match.map">
+              <option v-for="m in MAPS" :key="m" :value="m">{{ m }}</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Max Rounds</label>
+            <input type="number" v-model.number="cfg.match.max_rounds" min="1">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Cheaters per Match (0–10)</label>
+            <input type="number" v-model.number="cfg.match.cheaters_count" min="0" max="10">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Cheater Selection</label>
+            <select v-model="cfg.match.cheater_selection">
+              <option value="per_team">per_team</option>
+              <option value="global">global</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label class="field-label">Report Scope</label>
+            <select v-model="cfg.match.report_scope">
+              <option value="all">all</option>
+              <option value="enemy_team">enemy_team</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+        </svg>
+        <span class="section-card-title">Scoring</span>
+      </div>
+
+      <div class="section-card-body">
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label">Participation</label>
+            <input type="number" v-model.number="cfg.scoring.points_participation">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Correct Report</label>
+            <input type="number" v-model.number="cfg.scoring.points_correct_report">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Wrong Report</label>
+            <input type="number" v-model.number="cfg.scoring.points_wrong_report">
+          </div>
+
+          <div class="field">
+            <label class="field-label">No Cheater (correct)</label>
+            <input type="number" v-model.number="cfg.scoring.points_no_cheater_correct">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Kill</label>
+            <input type="number" v-model.number="cfg.scoring.points_kill">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Assist</label>
+            <input type="number" v-model.number="cfg.scoring.points_assist">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Death</label>
+            <input type="number" v-model.number="cfg.scoring.points_death">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <rect x="2" y="2" width="20" height="8" rx="2"/>
+          <rect x="2" y="14" width="20" height="8" rx="2"/>
+          <line x1="6" y1="6" x2="6.01" y2="6"/>
+          <line x1="6" y1="18" x2="6.01" y2="18"/>
+        </svg>
+        <span class="section-card-title">Server</span>
+      </div>
+
+      <div class="section-card-body">
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label">UDP Port</label>
+            <input type="number" v-model.number="cfg.server.port" min="1024" max="65535">
+          </div>
+
+          <div class="field">
+            <label class="field-label">GOTV Port</label>
+            <input type="number" v-model.number="cfg.server.tv_port" min="1024" max="65535">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Server Name</label>
+            <input type="text" v-model="cfg.server.server_name" maxlength="64">
+          </div>
+        </div>
+
+        <div class="toggle-group">
+          <label class="toggle-wrap">
+            <span class="toggle">
+              <input type="checkbox" v-model="cfg.server.insecure">
+              <span class="toggle-slider"></span>
+            </span>
+            <span class="toggle-label-text">Insecure mode (VAC off)</span>
+          </label>
+
+          <label class="toggle-wrap">
+            <span class="toggle">
+              <input type="checkbox" v-model="cfg.server.autoupdate">
+              <span class="toggle-slider"></span>
+            </span>
+            <span class="toggle-label-text">Auto-update CS2 on start</span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <path d="M3 9h18M9 21V9"/>
+        </svg>
+        <span class="section-card-title">UI / HUD</span>
+      </div>
+
+      <div class="section-card-body">
+        <div class="form-grid">
+          <div class="field">
+            <label class="field-label">Rules Display (sec)</label>
+            <input type="number" v-model.number="cfg.ui.rules_display_seconds" min="0">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Rules Delay on Connect (sec)</label>
+            <input type="number" v-model.number="cfg.ui.rules_delay_on_connect_seconds" min="0">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Report Menu Delay (sec)</label>
+            <input type="number" v-model.number="cfg.ui.report_menu_open_delay_seconds" min="0">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Wallhack Warning Before End (sec)</label>
+            <input type="number" v-model.number="cfg.ui.wallhack_warning_before_end_seconds" min="0">
+          </div>
+
+          <div class="field">
+            <label class="field-label">Chat Prefix</label>
+            <input type="text" v-model="cfg.ui.chat_prefix" maxlength="32">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-card">
+      <div class="section-card-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <span class="section-card-title">Developer</span>
+      </div>
+
+      <div class="section-card-body">
+        <div class="toggle-group toggle-group-top">
+          <label class="toggle-wrap">
+            <span class="toggle">
+              <input type="checkbox" v-model="cfg.dev.enabled">
+              <span class="toggle-slider"></span>
+            </span>
+            <span class="toggle-label-text">Dev mode enabled</span>
+          </label>
+
+          <label class="toggle-wrap">
+            <span class="toggle">
+              <input type="checkbox" v-model="cfg.dev.skip_player_check">
+              <span class="toggle-slider"></span>
+            </span>
+            <span class="toggle-label-text">Skip player count check</span>
+          </label>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Admin SteamIDs (one per line)</label>
+          <textarea v-model="adminIdsText" placeholder="76561198..."></textarea>
+          <span class="field-hint">17-digit SteamID64 values</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary" :disabled="saving">
+        <span v-if="saving" class="spinner"></span>
+        Save &amp; Apply
+      </button>
+
+      <span v-if="saveMsg" :class="saveOk ? 'text-green' : 'text-red'" class="save-status">
+        {{ saveMsg }}
+      </span>
+    </div>
+
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const { createApp, ref, onMounted } = Vue;
+
+const MAPS = ['de_dust2','de_mirage','de_inferno','de_nuke','de_ancient','de_anubis','de_vertigo'];
+
+const defaultCfg = () => ({
+  match:   { required_players:10, wallhack_duration_seconds:300, report_phase_duration_seconds:60, restart_delay_seconds:5, leaderboard_display_seconds:10, map:'de_dust2', max_rounds:30, cheaters_count:1, cheater_selection:'per_team', report_scope:'all' },
+  scoring: { points_participation:10, points_correct_report:30, points_wrong_report:-20, points_no_cheater_correct:30, points_kill:2, points_assist:1, points_death:-1 },
+  server:  { port:27015, tv_port:27020, server_name:'WallEye CS2 Server', insecure:true, autoupdate:true },
+  ui:      { rules_display_seconds:15, rules_delay_on_connect_seconds:3, report_menu_open_delay_seconds:3, wallhack_warning_before_end_seconds:60, chat_prefix:'[WallEye]' },
+  dev:     { enabled:true, skip_player_check:true, admin_steam_ids:[] },
+});
+
+createApp({
+  setup() {
+    const cfg          = ref(defaultCfg());
+    const adminIdsText = ref('');
+    const saving       = ref(false);
+    const saveMsg      = ref('');
+    const saveOk       = ref(true);
+
+    onMounted(async () => {
+      const { ok, data } = await apiFetch('/api/config');
+      if (!ok) {
+        toast('Failed to load config.', false);
+        return;
+      }
+
+      cfg.value = Object.assign(defaultCfg(), {
+        match:   { ...defaultCfg().match,   ...data.match },
+        scoring: { ...defaultCfg().scoring, ...data.scoring },
+        server:  { ...defaultCfg().server,  ...data.server },
+        ui:      { ...defaultCfg().ui,      ...data.ui },
+        dev:     { ...defaultCfg().dev,     ...data.dev },
+      });
+
+      adminIdsText.value = (data.dev?.admin_steam_ids || []).join('\n');
+    });
+
+    async function save() {
+      saving.value = true;
+      saveMsg.value = '';
+
+      const payload = JSON.parse(JSON.stringify(cfg.value));
+      payload.dev.admin_steam_ids = adminIdsText.value
+        .split('\n')
+        .map(s => s.trim())
+        .filter(Boolean);
+
+      const { ok, data } = await apiFetch('/api/config', 'POST', payload);
+
+      saving.value = false;
+      saveOk.value = ok;
+      saveMsg.value = ok ? 'Saved. Services restarting…' : (data.error || 'Error saving config');
+      toast(saveMsg.value, ok);
+    }
+
+    return { cfg, adminIdsText, saving, saveMsg, saveOk, save, MAPS };
+  }
+}).mount('#cfg-app');
+</script>
+{% endblock %}

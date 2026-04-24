@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="[[ csrf_token ]]">
+  <title>WallEye Admin Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="auth-page">
+  <section class="auth-card">
+    <div class="auth-logo">
+      <span class="logo-wall">WALL</span><span class="logo-eye">EYE</span>
+    </div>
+    <p class="auth-kicker">Admin Access</p>
+    <h1 class="auth-title">Secure dashboard login</h1>
+    <p class="auth-sub">Sign in to manage the CS2 stack, configuration, admins, and reports.</p>
+
+    {% if error %}
+    <div class="auth-error">[[ error ]]</div>
+    {% endif %}
+
+    <form class="auth-form" method="post" action="/login">
+      <input type="hidden" name="csrf_token" value="[[ csrf_token ]]">
+      <input type="hidden" name="next" value="[[ next_url ]]">
+
+      <label class="auth-field">
+        <span class="auth-label">Username</span>
+        <input class="auth-input" type="text" name="username" autocomplete="username" required>
+      </label>
+
+      <label class="auth-field">
+        <span class="auth-label">Password</span>
+        <input class="auth-input" type="password" name="password" autocomplete="current-password" required>
+      </label>
+
+      <button class="auth-submit" type="submit">Sign in</button>
+    </form>
+
+    <p class="auth-note">For best cookie security, terminate HTTPS in front of this service and set <strong>cookie_secure</strong> to true in the auth config.</p>
+  </section>
+</body>
+</html>

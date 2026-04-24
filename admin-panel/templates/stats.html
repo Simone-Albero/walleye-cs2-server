@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}Stats{% endblock %}
+
+{% block page_title %}Statistics{% endblock %}
+{% block page_sub %}Match history and scoring analytics{% endblock %}
+
+{% block content %}
+<div id="stats-app">
+
+  <div class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-val">{{ summary.total_matches ?? '—' }}</div>
+      <div class="kpi-label">Total Matches</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">{{ summary.unique_players ?? '—' }}</div>
+      <div class="kpi-label">Unique Players</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">{{ summary.detection_pct != null ? summary.detection_pct + '%' : '—' }}</div>
+      <div class="kpi-label">Detection Rate</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">{{ summary.avg_score ?? '—' }}</div>
+      <div class="kpi-label">Avg Score</div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-header">
+      <span>Match History</span>
+      <span style="margin-left:auto">{{ allMatches.length }} matches</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Match ID</th>
+            <th>Date</th>
+            <th>Cheaters</th>
+            <th>Reports</th>
+            <th>Demo</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="5">
+              <div class="table-loading">
+                <span class="spinner"></span>
+                Loading…
+              </div>
+            </td>
+          </tr>
+
+          <tr v-else-if="!pageRows.length">
+            <td colspan="5">
+              <div class="empty-state">
+                <div class="empty-icon">📊</div>
+                No matches yet.
+              </div>
+            </td>
+          </tr>
+
+          <tr
+            v-for="m in pageRows"
+            :key="m.id"
+            class="clickable"
+            @click="openMatch(m.id)">
+            <td class="td-mono text-gold">{{ m.id }}</td>
+            <td>{{ fmtDate(m.created_at) }}</td>
+            <td>
+              <span class="badge badge-down">{{ m.cheaters.length }}</span>
+            </td>
+            <td>{{ m.reports_count }}</td>
+            <td class="td-mono text-muted demo-cell">{{ m.demo || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="pagination" v-if="totalPages > 1">
+        <span class="pagination-info">{{ page + 1 }} / {{ totalPages }}</span>
+        <button class="btn btn-sm" :disabled="page === 0" @click="page--">← Prev</button>
+        <button class="btn btn-sm" :disabled="page >= totalPages - 1" @click="page++">Next →</button>
+      </div>
+    </div>
+  </div>
+
+  <Transition name="fade">
+    <div v-if="modal" class="modal-overlay" @click.self="modal = null">
+      <div class="modal">
+        <div class="modal-header">
+          <span class="modal-title text-mono">{{ modal.id }}</span>
+          <button class="modal-close" @click="modal = null">✕</button>
+        </div>
+
+        <div class="modal-body">
+          <div class="detail-grid">
+            <div class="detail-block">
+              <div class="metric-label">Cheaters</div>
+              <div class="metric-value">{{ (modal.cheaters || []).join(', ') || 'none' }}</div>
+            </div>
+
+            <div class="detail-block">
+              <div class="metric-label">Demo File</div>
+              <div class="metric-value td-mono demo-cell">{{ modal.demo || '—' }}</div>
+            </div>
+          </div>
+
+          <div class="section-card modal-section">
+            <div class="section-card-header">
+              <span>Report Summary</span>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Reporter</th>
+                    <th>Result</th>
+                    <th>Points</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-if="!(modal.report_summary || []).length">
+                    <td colspan="3" class="text-muted empty-row">No reports.</td>
+                  </tr>
+                  <tr v-for="r in modal.report_summary" :key="r.reporter">
+                    <td class="td-mono">{{ r.reporter }}</td>
+                    <td>{{ r.result }}</td>
+                    <td
+                      class="td-mono"
+                      :class="r.pts > 0 ? 'text-green' : r.pts < 0 ? 'text-red' : 'text-muted'">
+                      {{ r.pts > 0 ? '+' : '' }}{{ r.pts }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </Transition>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+const PAGE_SIZE = 10;
+
+createApp({
+  setup() {
+    const summary    = ref({});
+    const allMatches = ref([]);
+    const loading    = ref(true);
+    const page       = ref(0);
+    const modal      = ref(null);
+
+    const totalPages = computed(() => Math.max(1, Math.ceil(allMatches.value.length / PAGE_SIZE)));
+    const pageRows   = computed(() => allMatches.value.slice(page.value * PAGE_SIZE, (page.value + 1) * PAGE_SIZE));
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      return new Date(iso).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' });
+    }
+
+    async function openMatch(id) {
+      const { ok, data } = await apiFetch('/api/stats/match/' + id);
+      if (!ok) {
+        toast('Failed to load match.', false);
+        return;
+      }
+      modal.value = { id, ...data };
+    }
+
+    onMounted(async () => {
+      const [s, m] = await Promise.all([
+        apiFetch('/api/stats/summary'),
+        apiFetch('/api/stats/matches')
+      ]);
+
+      if (s.ok) summary.value = s.data;
+      if (m.ok) allMatches.value = m.data;
+
+      loading.value = false;
+    });
+
+    return {
+      summary,
+      allMatches,
+      loading,
+      pageRows,
+      page,
+      totalPages,
+      modal,
+      fmtDate,
+      openMatch
+    };
+  }
+}).mount('#stats-app');
+</script>
+{% endblock %}

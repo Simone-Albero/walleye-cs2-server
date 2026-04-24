@@ -1,0 +1,257 @@
+{% extends "base.html" %}
+{% block title %}Bug Reports{% endblock %}
+
+{% block page_title %}Bug Reports{% endblock %}
+{% block page_sub %}User-submitted reports — filter, resolve, and delete{% endblock %}
+
+{% block content %}
+<div id="bugreports-app">
+
+  <!-- ── Filters ─────────────────────────────────────────────────── -->
+  <div class="section-card" style="margin-bottom:1.25rem">
+    <div class="section-card-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+      </svg>
+      <span class="section-card-title">Filters</span>
+      <button class="btn btn-sm" style="margin-left:auto" @click="resetFilters">Reset</button>
+    </div>
+    <div class="section-card-body">
+      <div class="filter-grid">
+        <div class="field">
+          <label class="field-label">Status</label>
+          <select v-model="filters.status" @change="load">
+            <option value="">All</option>
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+          </select>
+        </div>
+        <div class="field">
+          <label class="field-label">Nickname</label>
+          <input type="text" v-model="filters.nickname" placeholder="Search nickname…" @input="debouncedLoad">
+        </div>
+        <div class="field">
+          <label class="field-label">Keyword</label>
+          <input type="text" v-model="filters.keyword" placeholder="Search in note…" @input="debouncedLoad">
+        </div>
+        <div class="field">
+          <label class="field-label">From date</label>
+          <input type="date" v-model="filters.date_from" @change="load">
+        </div>
+        <div class="field">
+          <label class="field-label">To date</label>
+          <input type="date" v-model="filters.date_to" @change="load">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Table ───────────────────────────────────────────────────── -->
+  <div class="section-card">
+    <div class="section-card-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span class="section-card-title">Reports</span>
+      <span style="margin-left:auto">
+        <span class="badge badge-open" v-if="openCount">{{ openCount }} open</span>
+        <span style="margin-left:.4rem;color:var(--text-muted)">{{ reports.length }} shown</span>
+      </span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:40px">#</th>
+            <th style="width:140px">Nickname</th>
+            <th>Description</th>
+            <th style="width:160px">Date</th>
+            <th style="width:100px">Status</th>
+            <th style="width:130px" class="r">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="6">
+              <div class="table-loading">
+                <span class="spinner"></span>
+                Loading…
+              </div>
+            </td>
+          </tr>
+
+          <tr v-else-if="!reports.length">
+            <td colspan="6">
+              <div class="empty-state">
+                <div class="empty-icon">🐛</div>
+                No reports match the current filters.
+              </div>
+            </td>
+          </tr>
+
+          <tr
+            v-else
+            v-for="r in reports"
+            :key="r.id"
+            :class="{ 'row-resolved': r.status === 'resolved' }">
+            <td class="td-mono text-muted">{{ r.id }}</td>
+            <td class="td-bold">{{ r.nickname }}</td>
+            <td>
+              <span v-if="!expanded[r.id]">
+                {{ r.note.length > 120 ? r.note.slice(0, 120) + '…' : r.note }}
+                <button
+                  v-if="r.note.length > 120"
+                  class="btn-inline"
+                  @click="expanded[r.id] = true">
+                  more
+                </button>
+              </span>
+              <span v-else>
+                {{ r.note }}
+                <button class="btn-inline" @click="expanded[r.id] = false">less</button>
+              </span>
+            </td>
+            <td class="td-mono text-muted">{{ fmtDate(r.created_at) }}</td>
+            <td>
+              <span :class="r.status === 'resolved' ? 'badge badge-ok' : 'badge badge-open'">
+                {{ r.status }}
+              </span>
+            </td>
+            <td class="r" style="white-space:nowrap">
+              <button
+                v-if="r.status === 'open'"
+                class="btn btn-sm btn-primary"
+                :disabled="busy[r.id]"
+                @click="resolve(r)">
+                ✓ Resolve
+              </button>
+              <button
+                v-else
+                class="btn btn-sm"
+                :disabled="busy[r.id]"
+                @click="reopen(r)">
+                Reopen
+              </button>
+              <button
+                class="btn btn-sm btn-danger"
+                style="margin-left:.35rem"
+                :disabled="busy[r.id]"
+                @click="remove(r)">
+                Delete
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const { createApp, ref, computed, reactive, onMounted } = Vue;
+
+createApp({
+  setup() {
+    const reports  = ref([]);
+    const loading  = ref(true);
+    const busy     = reactive({});
+    const expanded = reactive({});
+
+    const filters = reactive({
+      status:    '',
+      nickname:  '',
+      keyword:   '',
+      date_from: '',
+      date_to:   '',
+    });
+
+    const openCount = computed(() => reports.value.filter(r => r.status === 'open').length);
+
+    function buildUrl() {
+      const p = new URLSearchParams();
+      if (filters.status)    p.set('status',    filters.status);
+      if (filters.nickname)  p.set('nickname',  filters.nickname);
+      if (filters.keyword)   p.set('keyword',   filters.keyword);
+      if (filters.date_from) p.set('date_from', filters.date_from);
+      if (filters.date_to)   p.set('date_to',   filters.date_to);
+      return '/api/bug-reports?' + p.toString();
+    }
+
+    async function load() {
+      loading.value = true;
+      const { ok, data } = await apiFetch(buildUrl());
+      if (ok && Array.isArray(data)) reports.value = data;
+      loading.value = false;
+    }
+
+    // Simple debounce for text inputs
+    let debTimer = null;
+    function debouncedLoad() {
+      clearTimeout(debTimer);
+      debTimer = setTimeout(load, 350);
+    }
+
+    function resetFilters() {
+      filters.status    = '';
+      filters.nickname  = '';
+      filters.keyword   = '';
+      filters.date_from = '';
+      filters.date_to   = '';
+      load();
+    }
+
+    async function setStatus(r, status) {
+      busy[r.id] = true;
+      const { ok, data } = await apiFetch(`/api/bug-reports/${r.id}`, 'PATCH', { status });
+      if (ok) {
+        r.status = status;
+        toast(`Report #${r.id} marked as ${status}.`, true);
+      } else {
+        toast(data.error || 'Error updating report.', false);
+      }
+      busy[r.id] = false;
+    }
+
+    function resolve(r) { setStatus(r, 'resolved'); }
+    function reopen(r)  { setStatus(r, 'open'); }
+
+    async function remove(r) {
+      if (!confirm(`Delete report #${r.id} from "${r.nickname}"?`)) return;
+      busy[r.id] = true;
+      const { ok, data } = await apiFetch(`/api/bug-reports/${r.id}`, 'DELETE');
+      if (ok) {
+        reports.value = reports.value.filter(x => x.id !== r.id);
+        toast(`Report #${r.id} deleted.`, true);
+      } else {
+        toast(data.error || 'Error deleting report.', false);
+      }
+      busy[r.id] = false;
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('en-GB', {
+          year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit',
+        });
+      } catch { return iso; }
+    }
+
+    onMounted(load);
+
+    return {
+      reports, loading, busy, expanded, filters, openCount,
+      load, debouncedLoad, resetFilters,
+      resolve, reopen, remove, fmtDate,
+    };
+  }
+}).mount('#bugreports-app');
+</script>
+{% endblock %}

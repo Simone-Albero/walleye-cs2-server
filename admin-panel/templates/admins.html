@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Admins{% endblock %}
+
+{% block page_title %}Admin Management{% endblock %}
+{% block page_sub %}CS2 server admins — changes restart the game server{% endblock %}
+
+{% block content %}
+<div id="admins-app">
+
+  <div class="section-card">
+    <div class="section-card-header">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <line x1="19" y1="8" x2="19" y2="14"/>
+        <line x1="22" y1="11" x2="16" y2="11"/>
+      </svg>
+      <span class="section-card-title">Add Admin</span>
+    </div>
+
+    <div class="section-card-body">
+      <form @submit.prevent="addAdmin" class="admin-form">
+        <div class="field admin-form-user">
+          <label class="field-label">Username</label>
+          <input type="text" v-model="newUsername" placeholder="nickname" maxlength="32">
+        </div>
+
+        <div class="field admin-form-steamid">
+          <label class="field-label">SteamID64</label>
+          <input
+            type="text"
+            v-model="newSteamid"
+            placeholder="76561198…"
+            maxlength="17"
+            :class="{ 'steam-err': steamidInvalid }">
+          <span v-if="steamidInvalid" class="field-hint text-red">Must be exactly 17 digits</span>
+        </div>
+
+        <div class="admin-form-action">
+          <button type="submit" class="btn btn-primary" :disabled="adding">
+            <span v-if="adding" class="spinner"></span>
+            Add Admin
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <div class="section-card-header">
+      <span>Admin List</span>
+      <span style="margin-left:auto">{{ admins.length }} admins</span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Username</th>
+            <th>SteamID64</th>
+            <th class="r admin-actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="loading">
+            <td colspan="3">
+              <div class="table-loading">
+                <span class="spinner"></span>
+                Loading…
+              </div>
+            </td>
+          </tr>
+
+          <tr v-else-if="!admins.length">
+            <td colspan="3">
+              <div class="empty-state">
+                <div class="empty-icon">🛡</div>
+                No admins configured.
+              </div>
+            </td>
+          </tr>
+
+          <tr v-for="a in admins" :key="a.steamid">
+            <td>{{ a.username || '—' }}</td>
+            <td><code>{{ a.steamid }}</code></td>
+            <td class="r">
+              <button class="btn btn-sm btn-danger" @click="removeAdmin(a)">Remove</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+createApp({
+  setup() {
+    const admins      = ref([]);
+    const loading     = ref(true);
+    const newUsername = ref('');
+    const newSteamid  = ref('');
+    const adding      = ref(false);
+
+    const steamidInvalid = computed(() => newSteamid.value && !/^\d{17}$/.test(newSteamid.value));
+
+    async function loadAdmins() {
+      loading.value = true;
+      const { ok, data } = await apiFetch('/api/admins');
+      if (ok) admins.value = data;
+      loading.value = false;
+    }
+
+    async function addAdmin() {
+      const sid = newSteamid.value.trim();
+      if (!/^\d{17}$/.test(sid)) {
+        toast('SteamID64 must be exactly 17 digits.', false);
+        return;
+      }
+
+      adding.value = true;
+      const { ok, data } = await apiFetch('/api/admins', 'POST', {
+        username: newUsername.value.trim(),
+        steamid: sid
+      });
+      adding.value = false;
+
+      toast(ok ? 'Admin added. Server restarting…' : (data.error || 'Error'), ok);
+
+      if (ok) {
+        newUsername.value = '';
+        newSteamid.value = '';
+        await loadAdmins();
+      }
+    }
+
+    async function removeAdmin(a) {
+      if (!confirm(`Remove admin ${a.username || a.steamid}?`)) return;
+
+      const { ok, data } = await apiFetch('/api/admins/' + a.steamid, 'DELETE');
+      toast(ok ? 'Admin removed. Server restarting…' : (data.error || 'Error'), ok);
+
+      if (ok) await loadAdmins();
+    }
+
+    onMounted(loadAdmins);
+
+    return {
+      admins,
+      loading,
+      newUsername,
+      newSteamid,
+      adding,
+      steamidInvalid,
+      addAdmin,
+      removeAdmin
+    };
+  }
+}).mount('#admins-app');
+</script>
+{% endblock %}

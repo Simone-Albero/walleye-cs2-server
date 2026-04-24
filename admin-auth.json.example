@@ -1,0 +1,6 @@
+{
+  "username": "admin",
+  "password_hash": "generate-with-generate_admin_auth.py",
+  "session_secret": "generate-with-generate_admin_auth.py",
+  "cookie_secure": false
+}

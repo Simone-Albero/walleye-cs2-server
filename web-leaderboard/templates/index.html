@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WallEye — CS2 Leaderboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/leaderboard.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- ── Hero ─────────────────────────────────────────────── -->
+  <section class="hero">
+    <div
+      class="hero-bg"
+      id="hero-bg"
+      style="background-image:url('https://cdn.cloudflare.steamstatic.com/steam/apps/730/library_hero.jpg');">
+    </div>
+    <div class="hero-grid"></div>
+    <div class="hero-scan"></div>
+    <div class="hero-glow"></div>
+
+    <div class="hero-content">
+      <div class="hero-eyebrow">
+        <span class="hero-dot"></span>
+        Counter-Strike 2 · Competitive Integrity Server
+      </div>
+      <h1 class="hero-title">WALL<span>EYE</span></h1>
+      <p class="hero-sub">Competitive Integrity · Leaderboard</p>
+    </div>
+  </section>
+
+  <!-- ── Topbar ────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="topbar-logo">WALLEYE</span>
+      <span class="topbar-sep"></span>
+      <span class="topbar-sub">CS2 Server</span>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-live" v-if="!fetchError">
+        <span class="live-dot"></span>LIVE
+      </div>
+      <span class="topbar-time">{{ lastUpdated }}</span>
+    </div>
+  </header>
+
+  <!-- ── Error banner ──────────────────────────────────────── -->
+  <div v-if="fetchError" class="err-banner">
+    <span class="spinner"></span>
+    API unreachable — retrying every 10s
+  </div>
+
+  <!-- ── Main content ──────────────────────────────────────── -->
+  <main class="page">
+
+    <div class="tabs">
+      <button class="tab-btn" :class="{active: tab==='lb'}"  @click="tab='lb'">🏆 Leaderboard</button>
+      <button class="tab-btn" :class="{active: tab==='bug'}" @click="tab='bug'">⚠️ Report Bug</button>
+    </div>
+
+    <!-- ═══════════ LEADERBOARD ═══════════════════════════════ -->
+    <div v-show="tab==='lb'">
+
+      <!-- KPIs -->
+      <div class="kpi-grid">
+        <div class="kpi">
+          <div class="kpi-icon">👤</div>
+          <div class="kpi-val">{{ players.length }}</div>
+          <div class="kpi-label">Players</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon">🎮</div>
+          <div class="kpi-val">{{ maxMatches }}</div>
+          <div class="kpi-label">Max Matches</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon">🏅</div>
+          <div class="kpi-val">{{ topScore }}</div>
+          <div class="kpi-label">Top Score</div>
+        </div>
+        <div class="kpi">
+          <div class="kpi-icon">📊</div>
+          <div class="kpi-val">{{ avgScore }}</div>
+          <div class="kpi-label">Avg Score</div>
+        </div>
+      </div>
+
+      <!-- Search -->
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input class="search-input" v-model="search"
+               placeholder="Find your rank — type your nickname…"
+               @keydown.esc="search=''">
+        <button v-if="search" class="search-clear" @click="search=''">✕</button>
+      </div>
+
+      <!-- Player card (search result) -->
+      <transition name="card-fade">
+        <div v-if="spotlight" class="player-card">
+          <button class="player-card-close" @click="search=''" title="Close">✕</button>
+          <div class="player-card-header">
+            <div class="player-card-rank">#{{ spotlight.rank }}</div>
+            <div class="player-card-name">{{ spotlight.nickname }}</div>
+            <div class="player-card-pts">{{ spotlight.total_points }} <span>pts</span></div>
+          </div>
+          <div class="player-card-grid">
+            <div class="player-card-stat">
+              <div class="pc-stat-val">{{ spotlight.matches_played }}</div>
+              <div class="pc-stat-lbl">Matches</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val pc-green">{{ spotlight.kills }}</div>
+              <div class="pc-stat-lbl">Kills</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val pc-red">{{ spotlight.deaths }}</div>
+              <div class="pc-stat-lbl">Deaths</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val">{{ spotlight.assists }}</div>
+              <div class="pc-stat-lbl">Assists</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val" :style="kdColor(spotlight)">{{ kd(spotlight) }}</div>
+              <div class="pc-stat-lbl">K/D</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val pc-green">{{ spotlight.correct_reports }}</div>
+              <div class="pc-stat-lbl">✓ Reports</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val pc-red">{{ spotlight.wrong_reports }}</div>
+              <div class="pc-stat-lbl">✗ Reports</div>
+            </div>
+            <div class="player-card-stat">
+              <div class="pc-stat-val">{{ accuracy(spotlight) }}%</div>
+              <div class="pc-stat-lbl">Accuracy</div>
+            </div>
+          </div>
+          <div class="player-card-acc">
+            <div class="acc-bg" style="height:6px">
+              <div class="acc-bar" :style="{width: accuracy(spotlight)+'%'}"></div>
+            </div>
+          </div>
+        </div>
+      </transition>
+      <div v-if="search.trim().length >= 2 && !spotlight && !loading"
+           style="text-align:center;padding:.75rem;font-size:.85rem;color:#71717a;margin-bottom:1rem">
+        No player found for "{{ search }}"
+      </div>
+
+      <!-- Podium -->
+      <div v-if="players.length >= 3 && !search.trim()" class="podium">
+        <div class="podium-card podium-2">
+          <span class="podium-medal">🥈</span>
+          <div class="podium-rank">Rank #2</div>
+          <div class="podium-name">{{ players[1].nickname }}</div>
+          <div class="podium-pts">{{ players[1].total_points }}</div>
+          <div class="podium-sub">{{ players[1].matches_played }} matches</div>
+        </div>
+        <div class="podium-card podium-1">
+          <span class="podium-medal">🥇</span>
+          <div class="podium-rank">Rank #1</div>
+          <div class="podium-name">{{ players[0].nickname }}</div>
+          <div class="podium-pts">{{ players[0].total_points }}</div>
+          <div class="podium-sub">{{ players[0].matches_played }} matches · K/D {{ kd(players[0]) }}</div>
+        </div>
+        <div class="podium-card podium-3">
+          <span class="podium-medal">🥉</span>
+          <div class="podium-rank">Rank #3</div>
+          <div class="podium-name">{{ players[2].nickname }}</div>
+          <div class="podium-pts">{{ players[2].total_points }}</div>
+          <div class="podium-sub">{{ players[2].matches_played }} matches</div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="section-card">
+        <div class="section-header">
+          <span>📋</span>
+          Top 20 Rankings
+          <span style="margin-left:auto">{{ players.length }} players total</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Player</th>
+                <th class="r">Points</th>
+                <th class="r hide-sm">Matches</th>
+                <th class="r hide-sm">Kills</th>
+                <th class="r hide-sm">Deaths</th>
+                <th class="r hide-xs">Assists</th>
+                <th class="r hide-xs">K/D</th>
+                <th class="r hide-sm">✓ Rep</th>
+                <th class="r hide-sm">✗ Rep</th>
+                <th>Accuracy</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="11">
+                  <div class="empty"><span class="spinner spinner-lg"></span></div>
+                </td>
+              </tr>
+              <tr v-else-if="!players.length">
+                <td colspan="11">
+                  <div class="empty">
+                    <span class="empty-icon">🏆</span>
+                    No players yet — play a match to appear here!
+                  </div>
+                </td>
+              </tr>
+              <tr v-else v-for="(p, i) in top20" :key="p.steam_id"
+                  :class="['rank-'+(i+1)]"
+                  :style="{ animationDelay: (i*20)+'ms' }">
+                <td class="rank-cell">
+                  <span v-if="i===0">🥇</span>
+                  <span v-else-if="i===1">🥈</span>
+                  <span v-else-if="i===2">🥉</span>
+                  <span v-else>{{ i+1 }}</span>
+                </td>
+                <td class="player-name">{{ p.nickname }}</td>
+                <td class="pts-cell r">{{ p.total_points }}</td>
+                <td class="num-cell r hide-sm">{{ p.matches_played }}</td>
+                <td class="num-cell num-green r hide-sm">{{ p.kills }}</td>
+                <td class="num-cell num-red r hide-sm">{{ p.deaths }}</td>
+                <td class="num-cell r hide-xs">{{ p.assists }}</td>
+                <td class="num-cell r hide-xs" :style="kdColor(p)">{{ kd(p) }}</td>
+                <td class="num-cell num-green r hide-sm">{{ p.correct_reports }}</td>
+                <td class="num-cell num-red r hide-sm">{{ p.wrong_reports }}</td>
+                <td>
+                  <div class="acc-wrap">
+                    <div class="acc-bg"><div class="acc-bar" :style="{width: accuracy(p)+'%'}"></div></div>
+                    <span class="acc-lbl">{{ accuracy(p) }}%</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /leaderboard -->
+
+    <!-- ═══════════ BUG REPORT ════════════════════════════════ -->
+    <div v-show="tab==='bug'">
+      <div class="section-card form-card">
+        <div class="section-header"><span>⚠️</span> Submit a Bug Report</div>
+        <div class="form-body">
+          <p class="form-desc">Found something broken? Let us know — reports go directly to the admin team.</p>
+
+          <div v-if="bugFeedback"
+               :class="bugFeedback.ok ? 'feedback feedback-ok' : 'feedback feedback-err'">
+            <span>{{ bugFeedback.ok ? '✓' : '✕' }}</span>
+            {{ bugFeedback.msg }}
+          </div>
+
+          <form @submit.prevent="submitBug">
+            <div class="field" style="margin-bottom:.85rem">
+              <label for="bug-nick">Your Nickname</label>
+              <input id="bug-nick" type="text" v-model="bugNickname"
+                     placeholder="The nickname you play with…" maxlength="64">
+            </div>
+            <div class="field" style="margin-bottom:.85rem">
+              <label for="bug-note">Description</label>
+              <textarea id="bug-note" v-model="bugNote"
+                        placeholder="What happened, when, and what you expected instead…"
+                        maxlength="1000"></textarea>
+              <div class="char-count" :class="{warn: bugNote.length > 900}">{{ bugNote.length }} / 1000</div>
+            </div>
+            <button type="submit" class="btn btn-gold" :disabled="bugSending">
+              <span v-if="bugSending" class="spinner"></span>
+              Submit Report
+            </button>
+          </form>
+        </div>
+      </div>
+    </div><!-- /bug -->
+
+  </main>
+</div><!-- #app -->
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const { createApp, ref, computed, watch, nextTick, onMounted, onUnmounted } = Vue;
+
+createApp({
+  setup() {
+    const players     = ref([]);
+    const loading     = ref(true);
+    const fetchError  = ref(false);
+    const lastUpdated = ref('');
+    const search      = ref('');
+    const tab         = ref('lb');
+
+    /* KPIs */
+    const topScore   = computed(() => players.value.length ? players.value[0].total_points : '—');
+    const maxMatches = computed(() => players.value.length ? Math.max(...players.value.map(p => p.matches_played)) : '—');
+    const avgScore   = computed(() => {
+      if (!players.value.length) return '—';
+      return Math.round(players.value.reduce((a, p) => a + p.total_points, 0) / players.value.length);
+    });
+
+    /* Top 20 for the table */
+    const top20 = computed(() => players.value.slice(0, 20));
+
+    /* Helpers */
+    function accuracy(p) {
+      const tot = (p.correct_reports || 0) + (p.wrong_reports || 0);
+      return tot > 0 ? Math.round(p.correct_reports / tot * 100) : 0;
+    }
+    function kd(p) {
+      const k = p.kills || 0, d = p.deaths || 0;
+      if (k === 0 && d === 0) return '—';
+      if (d === 0) return k.toFixed(1);
+      return (k / d).toFixed(2);
+    }
+    function kdColor(p) {
+      const k = p.kills || 0, d = p.deaths || 0;
+      if (k === 0 && d === 0) return {};
+      const r = d === 0 ? 99 : k / d;
+      if (r >= 1.5) return { color: 'var(--green)' };
+      if (r < 0.75) return { color: 'var(--red)' };
+      return { color: 'var(--text-dim)' };
+    }
+    /* Player card (search) */
+    const spotlight = computed(() => {
+      const q = search.value.trim().toLowerCase();
+      if (q.length < 2) return null;
+      const idx = players.value.findIndex(p => p.nickname.toLowerCase().includes(q));
+      return idx === -1 ? null : { ...players.value[idx], rank: idx + 1 };
+    });
+
+    /* Fetch */
+    let timer = null;
+    async function fetchLeaderboard() {
+      try {
+        const res  = await fetch('/api/leaderboard');
+        const data = await res.json();
+        players.value    = data.players || [];
+        fetchError.value = false;
+        lastUpdated.value = new Date().toLocaleTimeString('en-GB');
+      } catch {
+        fetchError.value  = true;
+        lastUpdated.value = 'Error';
+      }
+      loading.value = false;
+    }
+    onMounted(() => { fetchLeaderboard(); timer = setInterval(fetchLeaderboard, 10000); });
+    onUnmounted(() => clearInterval(timer));
+
+    /* Bug report */
+    const bugNickname = ref('');
+    const bugNote     = ref('');
+    const bugSending  = ref(false);
+    const bugFeedback = ref(null);
+
+    async function submitBug() {
+      bugFeedback.value = null;
+      const nick = bugNickname.value.trim();
+      const note = bugNote.value.trim();
+      if (!nick) { bugFeedback.value = { ok: false, msg: 'Please enter your nickname.' }; return; }
+      if (!note) { bugFeedback.value = { ok: false, msg: 'Please describe the bug.' }; return; }
+      bugSending.value = true;
+      try {
+        const res  = await fetch('/api/bug-report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nickname: nick, note }),
+        });
+        const json = await res.json();
+        if (res.ok) {
+          bugFeedback.value = { ok: true, msg: 'Report submitted — thank you!' };
+          bugNickname.value = '';
+          bugNote.value     = '';
+        } else {
+          bugFeedback.value = { ok: false, msg: json.error || 'Submission failed.' };
+        }
+      } catch {
+        bugFeedback.value = { ok: false, msg: 'Network error — please try again.' };
+      }
+      bugSending.value = false;
+    }
+
+    return {
+      players, loading, fetchError, lastUpdated, search, tab,
+      topScore, maxMatches, avgScore, top20,
+      accuracy, kd, kdColor, spotlight,
+      bugNickname, bugNote, bugSending, bugFeedback, submitBug,
+    };
+  }
+}).mount('#app');
+</script>
+</body>
+</html>
