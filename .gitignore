@@ -1,0 +1,14 @@
+# Dati runtime
+data/replays/
+data/reports/
+data/cheat_history.json
+data/pending_match.json
+data/match_counter.json
+
+# Build artifacts plugin C#
+cs2_main_image/plugins/WallEyeServer/bin/
+cs2_main_image/plugins/WallEyeServer/obj/
+
+# Secrets
+.env
+admin-auth.json
