@@ -24,6 +24,15 @@
       <div class="kpi-val text-mono">{{ lastUpdated || '—' }}</div>
       <div class="kpi-label">Last Update</div>
     </div>
+    <div class="kpi">
+      <div class="kpi-val">{{ gameStatus.phase || 'unknown' }}</div>
+      <div class="kpi-label">
+        Current Phase
+        <span v-if="gameStatus.players != null" class="text-mono">
+          · {{ gameStatus.players }}/{{ gameStatus.required_players ?? '—' }}
+        </span>
+      </div>
+    </div>
   </div>
 
   <div class="cards-grid">
@@ -106,6 +115,7 @@ createApp({
       }))
     );
     const restarting = ref(null);
+    const gameStatus = ref({ phase: 'unknown', players: null, required_players: null, match: null, cheaters: [] });
     const lastUpdated = ref('');
     let timer = null;
 
@@ -113,6 +123,8 @@ createApp({
       const { ok, data } = await apiFetch('/api/status');
       if (!ok) return;
       services.value = NAMES.map(n => ({ name: n, ...data[n] }));
+      const game = await apiFetch('/api/game-status');
+      if (game.ok) gameStatus.value = game.data;
       lastUpdated.value = new Date().toLocaleTimeString();
     }
 
@@ -143,7 +155,7 @@ createApp({
 
     onUnmounted(() => clearInterval(timer));
 
-    return { services, restarting, lastUpdated, restart, badgeClass, ramLabel };
+    return { services, restarting, gameStatus, lastUpdated, restart, badgeClass, ramLabel };
   }
 }).mount('#dash-app');
 </script>

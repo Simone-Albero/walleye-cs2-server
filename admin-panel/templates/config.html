@@ -25,8 +25,8 @@
           </div>
 
           <div class="field">
-            <label class="field-label">Wallhack Duration (sec)</label>
-            <input type="number" v-model.number="cfg.match.wallhack_duration_seconds" min="10">
+            <label class="field-label">Warmup Duration (sec)</label>
+            <input type="number" v-model.number="cfg.match.warmup_duration_seconds" min="10">
           </div>
 
           <div class="field">
@@ -204,8 +204,8 @@
           </div>
 
           <div class="field">
-            <label class="field-label">Wallhack Warning Before End (sec)</label>
-            <input type="number" v-model.number="cfg.ui.wallhack_warning_before_end_seconds" min="0">
+            <label class="field-label">Warmup Warning Before End (sec)</label>
+            <input type="number" v-model.number="cfg.ui.warmup_warning_before_end_seconds" min="0">
           </div>
 
           <div class="field">
@@ -274,10 +274,10 @@ const { createApp, ref, onMounted } = Vue;
 const MAPS = ['de_dust2','de_mirage','de_inferno','de_nuke','de_ancient','de_anubis','de_vertigo'];
 
 const defaultCfg = () => ({
-  match:   { required_players:10, wallhack_duration_seconds:300, report_phase_duration_seconds:60, restart_delay_seconds:5, leaderboard_display_seconds:10, map:'de_dust2', max_rounds:30, cheaters_count:1, cheater_selection:'per_team', report_scope:'all' },
+  match:   { required_players:10, warmup_duration_seconds:300, report_phase_duration_seconds:60, restart_delay_seconds:5, leaderboard_display_seconds:10, map:'de_dust2', max_rounds:30, cheaters_count:1, cheater_selection:'per_team', report_scope:'all' },
   scoring: { points_participation:10, points_correct_report:30, points_wrong_report:-20, points_no_cheater_correct:30, points_kill:2, points_assist:1, points_death:-1 },
   server:  { port:27015, tv_port:27020, server_name:'WallEye CS2 Server', insecure:true, autoupdate:true },
-  ui:      { rules_display_seconds:15, rules_delay_on_connect_seconds:3, report_menu_open_delay_seconds:3, wallhack_warning_before_end_seconds:60, chat_prefix:'[WallEye]' },
+  ui:      { rules_display_seconds:15, rules_delay_on_connect_seconds:3, report_menu_open_delay_seconds:3, warmup_warning_before_end_seconds:60, chat_prefix:'[WallEye]' },
   dev:     { enabled:true, skip_player_check:true, admin_steam_ids:[] },
 });
 
@@ -296,6 +296,13 @@ createApp({
         return;
       }
 
+      if (data.match?.wallhack_duration_seconds !== undefined && data.match?.warmup_duration_seconds === undefined) {
+        data.match.warmup_duration_seconds = data.match.wallhack_duration_seconds;
+      }
+      if (data.ui?.wallhack_warning_before_end_seconds !== undefined && data.ui?.warmup_warning_before_end_seconds === undefined) {
+        data.ui.warmup_warning_before_end_seconds = data.ui.wallhack_warning_before_end_seconds;
+      }
+
       cfg.value = Object.assign(defaultCfg(), {
         match:   { ...defaultCfg().match,   ...data.match },
         scoring: { ...defaultCfg().scoring, ...data.scoring },
@@ -312,6 +319,8 @@ createApp({
       saveMsg.value = '';
 
       const payload = JSON.parse(JSON.stringify(cfg.value));
+      delete payload.match.wallhack_duration_seconds;
+      delete payload.ui.wallhack_warning_before_end_seconds;
       payload.dev.admin_steam_ids = adminIdsText.value
         .split('\n')
         .map(s => s.trim())

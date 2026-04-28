@@ -6,14 +6,13 @@ using System.Text.Json.Serialization;
 
 namespace WallEyeServer;
 
-// ── Config classes (mutable — support css_we_set runtime modifications) ──────────
+// ── Config classes (mutable — support css_set runtime modifications) ──────────
 
 public class WallEyeConfig
 {
     [JsonPropertyName("match")]   public MatchConfig   Match   { get; set; } = new();
     [JsonPropertyName("scoring")] public ScoringConfig Scoring { get; set; } = new();
     [JsonPropertyName("server")]  public ServerConfig  Server  { get; set; } = new();
-    [JsonPropertyName("esp")]     public EspConfig     Esp     { get; set; } = new();
     [JsonPropertyName("ui")]      public UiConfig      Ui      { get; set; } = new();
     [JsonPropertyName("dev")]     public DevConfig     Dev     { get; set; } = new();
 }
@@ -21,14 +20,14 @@ public class WallEyeConfig
 public class MatchConfig
 {
     [JsonPropertyName("required_players")]              public int    RequiredPlayers    { get; set; } = 10;
-    [JsonPropertyName("wallhack_duration_seconds")]     public float  WallhackDuration   { get; set; } = 300;
+    [JsonPropertyName("warmup_duration_seconds")]       public float  WarmupDuration     { get; set; } = 300;
     [JsonPropertyName("report_phase_duration_seconds")] public float  ReportDuration     { get; set; } = 60;
     [JsonPropertyName("restart_delay_seconds")]         public float  RestartDelay       { get; set; } = 5;
     [JsonPropertyName("leaderboard_display_seconds")]   public float  LeaderboardDisplay { get; set; } = 10;
     [JsonPropertyName("map")]                           public string Map                { get; set; } = "de_dust2";
     [JsonPropertyName("max_rounds")]                    public int    MaxRounds          { get; set; } = 30;
-    [JsonPropertyName("cheaters_count")]              public int    CheatersCount      { get; set; } = 1;
-    [JsonPropertyName("cheater_selection")]            public string CheaterSelection    { get; set; } = "per_team";
+    [JsonPropertyName("cheaters_count")]                public int    CheatersCount      { get; set; } = 1;
+    [JsonPropertyName("cheater_selection")]             public string CheaterSelection    { get; set; } = "global";
     [JsonPropertyName("report_scope")]                  public string ReportScope        { get; set; } = "all";
 }
 
@@ -48,21 +47,12 @@ public class ServerConfig
     [JsonPropertyName("data_path")] public string DataPath { get; set; } = "/data";
 }
 
-public class EspConfig
-{
-    [JsonPropertyName("cmd_enable_all")]     public string CmdEnableAll     { get; set; } = "css_esp_on";
-    [JsonPropertyName("cmd_disable_all")]    public string CmdDisableAll    { get; set; } = "css_esp_off";
-    [JsonPropertyName("cmd_enable_player")]  public string CmdEnablePlayer  { get; set; } = "css_esp \"{name}\" true";
-    [JsonPropertyName("cmd_disable_player")] public string CmdDisablePlayer { get; set; } = "css_esp \"{name}\" false";
-}
-
 public class UiConfig
 {
     [JsonPropertyName("rules_display_seconds")]               public float  RulesDisplay                   { get; set; } = 15;
     [JsonPropertyName("rules_delay_on_connect_seconds")]      public float  RulesDelay                     { get; set; } = 3;
     [JsonPropertyName("report_menu_open_delay_seconds")]      public float  ReportMenuDelay                { get; set; } = 3;
-    [JsonPropertyName("wallhack_warning_before_end_seconds")] public float  WallhackWarningBeforeEndSeconds { get; set; } = 60;
-    [JsonPropertyName("chat_prefix")]                         public string ChatPrefix                     { get; set; } = "[WallEye]";
+    [JsonPropertyName("chat_prefix")] public string ChatPrefix { get; set; } = "[WallEye]";
 }
 
 public class DevConfig
@@ -82,35 +72,68 @@ public class WallEyeServer : BasePlugin
 
     private MatchManager      _matchManager      = null!;
     private ReportModule      _reportModule      = null!;
-    private LeaderboardModule _leaderboardModule = null!;
     private RulesModule       _rulesModule       = null!;
     private DevModule         _devModule         = null!;
+    private EspModule         _espModule         = null!;
+    private WallEyeLog        _log               = null!;
 
     public override void Load(bool hotReload)
     {
         var cfg      = LoadConfig("/config/config.json");
         var dataPath = cfg.Server.DataPath;
+        _log = new WallEyeLog(dataPath, "Plugin");
+        _log.Info($"Loading WallEyeServer {ModuleVersion} (hotReload={hotReload})");
 
         _reportModule      = new ReportModule(this, dataPath, cfg);
-        _leaderboardModule = new LeaderboardModule(this, dataPath, cfg);
         _rulesModule       = new RulesModule(this, cfg);
+        _espModule         = new EspModule(this, dataPath);
         _matchManager      = new MatchManager(this, dataPath, cfg);
         _devModule         = new DevModule(this, cfg, _matchManager, _reportModule);
 
         _reportModule.Initialize();
-        _leaderboardModule.Initialize();
         _rulesModule.Initialize();
-        _matchManager.Initialize(_reportModule, _leaderboardModule);
+        _espModule.Initialize();
+        _matchManager.Initialize(_reportModule, _espModule);
         _devModule.Initialize();
 
-        AddCommand("css_walleye_status", "WallEye status", (player, _) =>
+        AddCommand("css_state", "WallEye state", (player, _) =>
             Server.PrintToChatAll($"{cfg.Ui.ChatPrefix} {_matchManager.GetStatusString()}"));
+
+        _log.Info("WallEyeServer loaded.");
     }
 
-    /// <summary>Loads config.json from the given path. Public so DevModule can call it for css_we_reload_config.</summary>
-    public static WallEyeConfig LoadConfig(string path) =>
-        JsonSerializer.Deserialize<WallEyeConfig>(
+    /// <summary>Loads config.json from the given path. Public so DevModule can call it for css_reload.</summary>
+    public static WallEyeConfig LoadConfig(string path)
+    {
+        var cfg = JsonSerializer.Deserialize<WallEyeConfig>(
             File.ReadAllText(path),
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
         ) ?? throw new Exception($"Invalid config.json at: {path}");
+
+        NormalizeConfig(cfg);
+        return cfg;
+    }
+
+    private static void NormalizeConfig(WallEyeConfig cfg)
+    {
+        cfg.Match.RequiredPlayers = Math.Max(1, cfg.Match.RequiredPlayers);
+        cfg.Match.WarmupDuration = Math.Max(1, cfg.Match.WarmupDuration);
+        cfg.Match.ReportDuration = Math.Max(1, cfg.Match.ReportDuration);
+        cfg.Match.RestartDelay = Math.Max(0, cfg.Match.RestartDelay);
+        cfg.Match.LeaderboardDisplay = Math.Max(0, cfg.Match.LeaderboardDisplay);
+        cfg.Match.MaxRounds = Math.Max(1, cfg.Match.MaxRounds);
+        cfg.Match.CheatersCount = Math.Max(0, cfg.Match.CheatersCount);
+        cfg.Match.Map = string.IsNullOrWhiteSpace(cfg.Match.Map) ? "de_dust2" : cfg.Match.Map;
+
+        if (cfg.Match.CheaterSelection is not ("global" or "per_team"))
+            cfg.Match.CheaterSelection = "global";
+
+        if (cfg.Match.ReportScope is not ("all" or "enemy_team"))
+            cfg.Match.ReportScope = "all";
+
+        cfg.Ui.RulesDisplay = Math.Max(1, cfg.Ui.RulesDisplay);
+        cfg.Ui.RulesDelay = Math.Max(0, cfg.Ui.RulesDelay);
+        cfg.Ui.ReportMenuDelay = Math.Max(0, cfg.Ui.ReportMenuDelay);
+        cfg.Ui.ChatPrefix = string.IsNullOrWhiteSpace(cfg.Ui.ChatPrefix) ? "[WallEye]" : cfg.Ui.ChatPrefix;
+    }
 }

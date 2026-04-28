@@ -6,28 +6,30 @@ public class RulesModule
 {
     private readonly WallEyeServer _plugin;
     private readonly WallEyeConfig _cfg;
+    private readonly WallEyeLog    _log;
 
     // ── Rules text — edit here ──────────────────────────────────────────────────────────────────
-    private const string RULES_HTML =
-        "<font color='#FFD700' size='22'><b>WELCOME TO WALLEYE CS2</b></font><br>" +
-        "<font color='#FFFFFF' size='14'>" +
-        "1. No external cheats. The server automatically assigns the cheater role.<br>" +
-        "2. Wallhack phase: watch for suspicious movement (ESP active for all players).<br>" +
-        "3. At match end the report menu opens automatically — vote who you suspect.<br>" +
-        "4. Correct report = +30 pts. Wrong report = -20 pts.<br>" +
-        "5. [PLACEHOLDER — customise your server rules here]" +
-        "</font>";
+    private static readonly string[] RulesLines =
+    [
+        "A match can have zero or more hidden cheaters.",
+        "During warmup, cheats are disabled for everyone.",
+        "When the match ends, vote for who you think the cheater is.",
+        "Correct report = +points  |  Wrong report = -points",
+        "Sometimes the correct report is No cheater.",
+    ];
     // ─────────────────────────────────────────────────────────────────────────
 
     public RulesModule(WallEyeServer plugin, WallEyeConfig cfg)
     {
         _plugin = plugin;
         _cfg    = cfg;
+        _log    = new WallEyeLog(cfg.Server.DataPath, nameof(RulesModule));
     }
 
     public void Initialize()
     {
         _plugin.RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnect);
+        _log.Info("Initialized.");
     }
 
     private HookResult OnPlayerConnect(EventPlayerConnectFull @event, GameEventInfo info)
@@ -38,9 +40,29 @@ public class RulesModule
         _plugin.AddTimer(_cfg.Ui.RulesDelay, () =>
         {
             if (player.IsValid)
-                player.PrintToCenterHtml(RULES_HTML, (int)_cfg.Ui.RulesDisplay);
+                ShowRules(player);
         });
 
         return HookResult.Continue;
+    }
+
+    // Stagger plain chat lines across rules_display_seconds so they remain
+    // visible (and naturally fade) instead of all arriving in one frame.
+    private void ShowRules(CCSPlayerController player)
+    {
+        var total = Math.Max(1f, _cfg.Ui.RulesDisplay);
+        var step  = total / (RulesLines.Length + 1);
+
+        player.PrintToChat($"{_cfg.Ui.ChatPrefix} — WALLEYE RULES —");
+        _log.Info($"Showing rules to {player.PlayerName}.");
+        for (var i = 0; i < RulesLines.Length; i++)
+        {
+            var line = RulesLines[i];
+            _plugin.AddTimer(step * (i + 1), () =>
+            {
+                if (player.IsValid)
+                    player.PrintToChat($"{_cfg.Ui.ChatPrefix} {line}");
+            });
+        }
     }
 }

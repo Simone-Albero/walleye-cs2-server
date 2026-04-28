@@ -20,10 +20,17 @@ def load_leaderboard():
             raw = json.load(f)
     except (json.JSONDecodeError, ValueError):
         return []
-    players = [
-        {
-            "steam_id":       sid,
-            "nickname":       p.get("nickname", "Unknown"),
+    players = []
+    for key, p in raw.items():
+        if not isinstance(p, dict):
+            continue
+        nickname = p.get("nickname") or ("" if key.isdigit() else key)
+        if not nickname:
+            continue
+        players.append({
+            "id":             nickname,
+            "steam_id":       p.get("steam_id") or (key if key.isdigit() else ""),
+            "nickname":       nickname,
             "total_points":   p.get("total_points",   0),
             "matches_played": p.get("matches_played", 0),
             "correct_reports":p.get("correct_reports",0),
@@ -31,9 +38,7 @@ def load_leaderboard():
             "kills":          p.get("kills",          0),
             "deaths":         p.get("deaths",         0),
             "assists":        p.get("assists",         0),
-        }
-        for sid, p in raw.items() if p.get("nickname")
-    ]
+        })
     players.sort(key=lambda x: x["total_points"], reverse=True)
     return players
 

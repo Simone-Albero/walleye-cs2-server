@@ -14,6 +14,7 @@ SAFE_LAUNCH_DIR="/home/steam/cs2-game"
 CSGO_DIR="$LAUNCH_DIR/csgo"
 CFG_DIR="$CSGO_DIR/cfg"
 CSS_PLUGINS="$CSGO_DIR/addons/counterstrikesharp/plugins"
+CSS_CONFIGS="$CSGO_DIR/addons/counterstrikesharp/configs"
 ADMINS_JSON="$CSGO_DIR/addons/counterstrikesharp/configs/admins.json"
 
 # Shared volume data directories
@@ -33,9 +34,9 @@ if [[ ! -d "$CSGO_DIR/addons/metamod" ]] || ! find "$CSGO_DIR/addons/metamod" -n
 fi
 
 mkdir -p "$CSS_PLUGINS"
+mkdir -p "$CSS_CONFIGS"
 
 EXPECTED_PLUGIN_FILES=(
-    "$CSS_PLUGINS/AdminESP/AdminESP.dll"
     "$CSS_PLUGINS/WallEyeServer/WallEyeServer.dll"
 )
 
@@ -46,7 +47,30 @@ for plugin_file in "${EXPECTED_PLUGIN_FILES[@]}"; do
     fi
 done
 
-echo "[WallEye] Found expected plugin artifacts: AdminESP, WallEyeServer."
+echo "[WallEye] Found expected plugin artifacts: WallEyeServer."
+
+# CounterStrikeSharp chat triggers:
+#   PublicChatTrigger is echoed in global chat.
+#   SilentChatTrigger executes commands without showing the typed command.
+CSS_CORE_JSON="$CSS_CONFIGS/core.json"
+if [[ -f "$CSS_CORE_JSON" ]]; then
+    tmp_core="$(mktemp)"
+    jq '.PublicChatTrigger = [] | .SilentChatTrigger = ((.SilentChatTrigger // []) + ["!", "/"] | unique)' \
+        "$CSS_CORE_JSON" > "$tmp_core"
+    mv "$tmp_core" "$CSS_CORE_JSON"
+else
+    cat > "$CSS_CORE_JSON" <<'JSON'
+{
+  "PublicChatTrigger": [],
+  "SilentChatTrigger": ["!", "/"],
+  "FollowCS2ServerGuidelines": true,
+  "PluginHotReloadEnabled": true,
+  "PluginAutoLoadEnabled": true,
+  "ServerLanguage": "en"
+}
+JSON
+fi
+echo "[WallEye] CounterStrikeSharp chat commands are silent for ! and /."
 
 # Config
 cp /home/steam/autoexec.cfg "$CFG_DIR/"
@@ -145,9 +169,8 @@ while (( SECONDS < startup_deadline )); do
 
     if grep -q "CounterStrikeSharp.API Loaded Successfully\." "$STARTUP_LOG" && \
        grep -q "\[META\] Loaded 1 plugin\." "$STARTUP_LOG" && \
-       grep -q "Finished loading plugin WallEyeServer" "$STARTUP_LOG" && \
-       grep -q "Finished loading plugin Admin ESP" "$STARTUP_LOG"; then
-        echo "[WallEye] Startup check passed: MetaMod, CounterStrikeSharp, WallEyeServer, and AdminESP are active."
+       grep -q "Finished loading plugin WallEyeServer" "$STARTUP_LOG"; then
+        echo "[WallEye] Startup check passed: MetaMod, CounterStrikeSharp, and WallEyeServer are active."
         wait "$SERVER_PID"
         exit $?
     fi

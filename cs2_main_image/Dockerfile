@@ -48,10 +48,6 @@ RUN mkdir -p /home/steam/download && \
     rm counterstrikesharp-with-runtime-linux-1.0.367.zip && \
     patchelf --clear-execstack addons/counterstrikesharp/bin/linuxsteamrt64/counterstrikesharp.so && \
     mkdir -p addons/counterstrikesharp/plugins && \
-    # AdminESP runtime plugin
-    curl -L https://github.com/kgarri/bg-koka-cs2-xray-esp/releases/download/v1.0.2/AdminESP.tar.gz --output AdminESP.tar.gz && \
-    tar -xzvf AdminESP.tar.gz -C addons/counterstrikesharp/plugins/ && \
-    rm AdminESP.tar.gz && \
     mkdir -p addons/counterstrikesharp/plugins/WallEyeServer && \
     true
 

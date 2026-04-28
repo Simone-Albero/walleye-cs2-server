@@ -15,7 +15,6 @@ SHELL := /bin/bash
 START_SCRIPT := ./start.sh
 ADMIN_AUTH_SCRIPT := ./generate_admin_auth.py
 ADMIN_AUTH_FILE ?= admin-auth.json
-ADMIN_AUTH_USER ?= admin
 ADMIN_AUTH_ARGS ?=
 COMPOSE    := docker compose
 # Container names (used for docker rm -f in clean)
@@ -78,7 +77,7 @@ setup:
 # ── Generate admin-auth.json ─────────────────────────────────────────────────
 admin-auth:
 	@echo "[WallEye] Generating $(ADMIN_AUTH_FILE)..."
-	@python3 $(ADMIN_AUTH_SCRIPT) --username "$(ADMIN_AUTH_USER)" $(ADMIN_AUTH_ARGS) --write "$(ADMIN_AUTH_FILE)"
+	@python3 $(ADMIN_AUTH_SCRIPT) $(ADMIN_AUTH_ARGS) --write "$(ADMIN_AUTH_FILE)"
 	@echo "[WallEye] Wrote $(ADMIN_AUTH_FILE)."
 
 # ── Start (first run or resume) ───────────────────────────────────────────────
@@ -92,6 +91,8 @@ up:
 
 # ── Down (stop + remove containers, preserve volumes) ─────────────────────────
 down:
+	@echo "[WallEye] AgN3kwskdn wklskdnslfnas grrrrrrrrrrrrrrrrrrrr!"
+	@echo "[WallEye] Sorry bad joke, but seriously..."
 	@echo "[WallEye] Stopping all services..."
 	@$(COMPOSE) down --remove-orphans
 	@echo "[WallEye] Done."

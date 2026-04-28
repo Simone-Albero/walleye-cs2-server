@@ -40,16 +40,29 @@ def _load_auth_config() -> tuple[dict | None, str | None]:
     except Exception as exc:
         return None, f"Invalid auth config: {exc}"
 
-    username = (raw.get("username") or "").strip()
-    password_hash = (raw.get("password_hash") or "").strip()
     session_secret = (raw.get("session_secret") or "").strip()
+    if not session_secret:
+        return None, "Auth config must include session_secret"
 
-    if not username or not password_hash or not session_secret:
-        return None, "Auth config must include username, password_hash, and session_secret"
+    # Support both old single-admin format and new multi-admin format
+    if "admins" in raw:
+        admins = [
+            {"username": (e.get("username") or "").strip(),
+             "password_hash": (e.get("password_hash") or "").strip()}
+            for e in raw["admins"]
+            if (e.get("username") or "").strip() and (e.get("password_hash") or "").strip()
+        ]
+    else:
+        # Legacy single-admin format
+        username = (raw.get("username") or "").strip()
+        password_hash = (raw.get("password_hash") or "").strip()
+        admins = [{"username": username, "password_hash": password_hash}] if username and password_hash else []
+
+    if not admins:
+        return None, "Auth config contains no valid admin accounts"
 
     return {
-        "username": username,
-        "password_hash": password_hash,
+        "admins": admins,
         "session_secret": session_secret,
         "cookie_secure": bool(raw.get("cookie_secure", False)),
     }, None
@@ -80,7 +93,7 @@ def _is_authenticated(auth_config: dict | None) -> bool:
     if not session.get("authenticated"):
         return False
     username = session.get("username", "")
-    return hmac.compare_digest(username, auth_config["username"])
+    return any(hmac.compare_digest(username, a["username"]) for a in auth_config["admins"])
 
 
 def _get_request_csrf_token() -> str:
@@ -170,12 +183,16 @@ def login():
         else:
             username = (request.form.get("username") or "").strip()
             password = request.form.get("password") or ""
-            username_ok = hmac.compare_digest(username, auth_config["username"])
-            password_ok = check_password_hash(auth_config["password_hash"], password)
-            if username_ok and password_ok:
+            matched = next(
+                (a for a in auth_config["admins"]
+                 if hmac.compare_digest(username, a["username"])
+                 and check_password_hash(a["password_hash"], password)),
+                None,
+            )
+            if matched:
                 session.clear()
                 session["authenticated"] = True
-                session["username"] = auth_config["username"]
+                session["username"] = matched["username"]
                 session["csrf_token"] = secrets.token_urlsafe(32)
                 session.permanent = True
                 return redirect(next_url)
@@ -247,6 +264,17 @@ def api_status():
                 info["status"] = f"error: {e}"
         result[name] = info
     return jsonify(result)
+
+@app.route("/api/game-status")
+def api_game_status():
+    status = _load_json(DATA_DIR / "status.json") or {}
+    return jsonify({
+        "phase": status.get("phase") or "unknown",
+        "players": status.get("players"),
+        "required_players": status.get("required_players"),
+        "match": status.get("match"),
+        "cheaters": status.get("cheaters") or [],
+    })
 
 @app.route("/api/health")
 def api_health():
@@ -386,6 +414,19 @@ def _restart_cs2_server():
 
 # ── API: Stats ─────────────────────────────────────────────────────────────────
 
+def _iter_player_records(players_raw: dict | None):
+    for key, value in (players_raw or {}).items():
+        if not isinstance(value, dict):
+            continue
+        nickname = value.get("nickname") or ("" if key.isdigit() else key)
+        if not nickname:
+            continue
+        yield {
+            **value,
+            "nickname": nickname,
+            "steam_id": value.get("steam_id") or (key if key.isdigit() else ""),
+        }
+
 @app.route("/api/stats/summary")
 def api_stats_summary():
     players_path = DATA_DIR / "players.json"
@@ -396,7 +437,8 @@ def api_stats_summary():
     matches_map = matches_raw.get("matches", {}) if matches_raw else {}
 
     total_matches = len(matches_map)
-    unique_players = len(players_raw) if players_raw else 0
+    player_records = list(_iter_player_records(players_raw))
+    unique_players = len(player_records)
 
     # Detection rate: % reporters who had at least 1 correct report
     total_reports  = sum(len(m.get("report_summary", [])) for m in matches_map.values())
@@ -408,16 +450,16 @@ def api_stats_summary():
     detection_pct  = round(correct_hits / total_reports * 100) if total_reports else 0
 
     top5 = []
-    if players_raw:
-        sorted_players = sorted(players_raw.items(), key=lambda x: x[1].get("total_points", 0), reverse=True)
+    if player_records:
+        sorted_players = sorted(player_records, key=lambda p: p.get("total_points", 0), reverse=True)
         top5 = [
-            {"steam_id": sid, "nickname": p.get("nickname", "Unknown"), "total_points": p.get("total_points", 0)}
-            for sid, p in sorted_players[:5]
+            {"nickname": p.get("nickname", "Unknown"), "steam_id": p.get("steam_id", ""), "total_points": p.get("total_points", 0)}
+            for p in sorted_players[:5]
         ]
 
     avg_score = 0
-    if players_raw:
-        all_scores = [p.get("total_points", 0) for p in players_raw.values()]
+    if player_records:
+        all_scores = [p.get("total_points", 0) for p in player_records]
         avg_score  = round(sum(all_scores) / len(all_scores), 1)
 
     return jsonify({

@@ -35,7 +35,7 @@ Auth configuration:
 Generate `admin-auth.json` from the project root:
 
 ```bash
-python3 generate_admin_auth.py --username admin --write admin-auth.json
+python3 generate_admin_auth.py --write admin-auth.json
 ```
 
 Equivalent Make target:
@@ -44,10 +44,10 @@ Equivalent Make target:
 make admin-auth
 ```
 
-The script prompts for the password, generates a compatible `password_hash`, creates a fresh `session_secret`, and writes the full JSON document. If the panel is behind HTTPS, use:
+The script prompts for the username and password, generates a compatible `password_hash`, creates a fresh `session_secret`, and writes the full JSON document. If the panel is behind HTTPS, use:
 
 ```bash
-python3 generate_admin_auth.py --username admin --cookie-secure --write admin-auth.json
+python3 generate_admin_auth.py --cookie-secure --write admin-auth.json
 ```
 
 Or with `make`:
@@ -85,7 +85,7 @@ How to save new CS2 admins from the web UI:
 4. Confirm the save action from the page.
 5. The panel writes the updated `admins.conf` and automatically restarts `cs2-server`, so the new admin list becomes active.
 
-Before saving a new admin, verify the SteamID64 carefully. The easiest check is to run `css_we_list_players` from the server console and copy the 17-digit SteamID64 shown next to the player.
+Before saving a new admin, verify the SteamID64 carefully. The easiest check is to run `css_players` from the server console and copy the 17-digit SteamID64 shown next to the player.
 
 ---
 
@@ -110,7 +110,7 @@ Then apply: `make apply-config` (or save via the admin panel Config page after l
 ## How to find your SteamID64
 
 1. Connect to the server
-2. From the server console type `css_we_list_players`
+2. From the server console type `css_players`
 3. The 17-digit number next to your name is your SteamID64
 4. Alternatively: [steamid.io](https://steamid.io/) or [steamidfinder.com](https://www.steamidfinder.com/)
 
@@ -124,74 +124,67 @@ Commands work from **in-game chat** (prefix `!` or `/`) and from the **server co
 
 | Command | Description |
 |---|---|
-| `css_we_help` | List all dev commands |
-| `css_we_status` | Full status: current phase, players, active cheaters, key parameters |
-| `css_we_list_players` | Connected players with SteamID64 and team (T/CT) |
+| `css_help` | List all dev commands |
+| `css_status` | Full status: current phase, players, active cheaters, key parameters |
+| `css_players` | Connected players with SteamID64 and team (T/CT) |
 
 ### Game cycle control
 
-| Command | Required state | Description |
-|---|---|---|
-| `css_we_skip_waiting` | `WaitingForPlayers` | Start wallhack phase ignoring player count |
-| `css_we_force_wallhack_end` | `WallhackPhase` | End wallhack → start match (cheater already assigned) |
-| `css_we_force_match_end` | `MatchRunning` | End match → start report phase |
-| `css_we_force_report_end` | `ReportPhase` | End report phase → start new cycle |
+| Command | Description |
+|---|---|
+| `css_phase` | Opens a popup to jump to Waiting, Wallhack, Match, Report, or Leaderboard/next cycle |
 
-> Force commands are **no-ops** if the state doesn't match (no crash, error message returned).
+The popup stays open until closed with `!9`.
 
 ### ESP
 
 | Command | Description |
 |---|---|
-| `css_we_esp_on` | Enable ESP for all players |
-| `css_we_esp_off` | Disable ESP for all players |
-| `css_we_esp_player <name> on` | Enable ESP for a specific player |
-| `css_we_esp_player <name> off` | Disable ESP for a specific player |
+| `css_xray` | Opens a popup with all-player ON/OFF and per-player ESP assignment |
 
-The `<name>` parameter is **case-insensitive** and supports **partial matching**
-(e.g. `mario` matches `Mario_CTfan`).
+The popup stays open until closed with `!9`.
 
 ### Cheater assignment
 
 | Command | Description |
 |---|---|
-| `css_we_set_cheater <name>` | Assign the cheater role (ESP) to a specific player. Works in any phase. |
+| `css_cheater <name>` | Assign the cheater role (ESP) to a specific player. Works in any phase. |
 
 ### Reports
 
 | Command | Description |
 |---|---|
-| `css_we_open_reports` | Open the report menu for all players |
+| `css_reports` | Open the report menu for all players |
 
 ### Runtime configuration
 
 | Command | Description |
 |---|---|
-| `css_we_set <key> <value>` | Modify an in-memory parameter (see table below) |
-| `css_we_reload_config` | Reload all parameters from `config.json` on disk |
-| `css_we_map <map>` | Change map immediately (e.g. `css_we_map de_inferno`) |
+| `css_set <key> <value>` | Modify an in-memory parameter (see table below) |
+| `css_reload` | Reload all parameters from `config.json` on disk |
+| `css_map <map>` | Change map immediately (e.g. `css_map de_inferno`) |
 
 ---
 
-## Parameters editable with `css_we_set`
+## Parameters editable with `css_set`
 
 | Key | Type | Description | Example |
 |---|---|---|---|
-| `required_players` | int | Players required to start | `css_we_set required_players 2` |
-| `wallhack_duration` | float | Wallhack phase duration (seconds) | `css_we_set wallhack_duration 30` |
-| `report_duration` | float | Report phase duration (seconds) | `css_we_set report_duration 20` |
-| `cheaters_count` | int | Number of cheaters to select | `css_we_set cheaters_count 2` |
-| `cheater_selection` | string | `per_team` = N per team, `global` = N from all players | `css_we_set cheater_selection global` |
-| `report_scope` | string | `all` = everyone, `enemy_team` = opposing team only | `css_we_set report_scope enemy_team` |
-| `restart_delay` | float | Pause before cycle restart (seconds) | `css_we_set restart_delay 0` |
-| `leaderboard_display` | float | In-game leaderboard display duration (seconds) | `css_we_set leaderboard_display 5` |
-| `skip_player_check` | bool | Ignore player count | `css_we_set skip_player_check true` |
-| `points_participation` | int | Points for participation | `css_we_set points_participation 5` |
-| `points_correct_report` | int | Points for a correct report | `css_we_set points_correct_report 50` |
-| `points_wrong_report` | int | Penalty for a wrong report (use negative) | `css_we_set points_wrong_report -10` |
+| `required_players` | int | Players required to start | `css_set required_players 2` |
+| `wallhack_duration` | float | Wallhack phase duration (seconds) | `css_set wallhack_duration 30` |
+| `report_duration` | float | Report phase duration (seconds) | `css_set report_duration 20` |
+| `cheaters_count` | int | Number of cheaters to select | `css_set cheaters_count 2` |
+| `cheater_selection` | string | `per_team` = N per team, `global` = N from all players | `css_set cheater_selection global` |
+| `report_scope` | string | `all` = everyone, `enemy_team` = opposing team only | `css_set report_scope enemy_team` |
+| `restart_delay` | float | Pause before cycle restart (seconds) | `css_set restart_delay 0` |
+| `leaderboard_display` | float | In-game leaderboard display duration (seconds) | `css_set leaderboard_display 5` |
+| `skip_player_check` | bool | Ignore player count | `css_set skip_player_check true` |
+| `points_participation` | int | Points for participation | `css_set points_participation 5` |
+| `points_correct_report` | int | Points for a correct report | `css_set points_correct_report 50` |
+| `points_wrong_report` | int | Penalty for a wrong report (use negative) | `css_set points_wrong_report -10` |
 
-> **Important:** `css_we_set` changes are **in-memory only** — lost on restart.
-> To make permanent: edit `config.json` and run `css_we_reload_config`, or
+> **Important:** `css_set` changes are **in-memory only** — lost on restart.
+> To make permanent: edit `config.json` and run `css_reload`, or
 > use the admin panel Config page (which also triggers a service restart).
 
 ---
@@ -293,28 +286,28 @@ revalidates `config.json`, then recreates `cs2-server`, `scoring-service`, `web-
 2. Verify wallhack phase
    → Chat: "[WallEye] Dev: skip_player_check active — starting wallhack immediately."
    → ESP should be visible for all
-   → Check: css_we_status → state=WallhackPhase
+   → Check: css_status → state=WallhackPhase
 
 3. End wallhack
-   css_we_force_wallhack_end
+   css_phase → Live match
    → Chat: "Wallhack DISABLED. The real match starts now!"
    → If selected as cheater: ESP active only for you
 
 4. Verify cheater assignment
-   css_we_status → "Cheaters: <yourName>"
-   Or manually assign: css_we_set_cheater <yourName>
+   css_status → "Cheaters: <yourName>"
+   Or manually assign: css_cheater <yourName>
 
 5. End the match
-   css_we_force_match_end
+   css_phase → Report phase
    → Report menu opens after report_menu_open_delay_seconds
 
 6. Verify report menu
    → ChatMenu with player list
    → If report_scope=enemy_team: verify it shows only the opposing team
-   Manual alternative: css_we_open_reports
+   Manual alternative: css_reports
 
 7. End report phase
-   css_we_force_report_end
+   css_phase → Leaderboard / next cycle
    → TOP 10 leaderboard appears for leaderboard_display_seconds
    → Cycle restarts automatically
 
@@ -327,36 +320,33 @@ revalidates `config.json`, then recreates `cs2-server`, `scoring-service`, `web-
 ### Quick config test
 
 ```
-css_we_set wallhack_duration 15
-css_we_set report_duration 15
-css_we_set leaderboard_display 3
-css_we_set restart_delay 2
-css_we_status   ← verify the values
+css_set wallhack_duration 15
+css_set report_duration 15
+css_set leaderboard_display 3
+css_set restart_delay 2
+css_status   ← verify the values
 ```
 
 ### Report scope test
 
 ```
-css_we_set report_scope enemy_team
-css_we_open_reports   ← menu shows only the opposing team
+css_set report_scope enemy_team
+css_reports   ← menu shows only the opposing team
 
-css_we_set report_scope all
-css_we_open_reports   ← menu shows everyone
+css_set report_scope all
+css_reports   ← menu shows everyone
 ```
 
 ### Manual ESP test
 
 ```
-css_we_esp_on                          ← ESP for all
-css_we_esp_off                         ← Disable for all
-css_we_esp_player PlayerName on        ← ESP only for them
-css_we_esp_player PlayerName off       ← Turn off
+css_xray   ← choose all-player ON/OFF or a player from the popup
 ```
 
 ### Map change test
 
 ```
-css_we_map de_inferno   ← changes map (server restarts on the new map)
+css_map de_inferno   ← changes map (server restarts on the new map)
 ```
 
 ---
@@ -365,8 +355,8 @@ css_we_map de_inferno   ← changes map (server restarts on the new map)
 
 - Dev commands are accessible **only** to SteamID64 entries in `dev.admin_steam_ids`
 - With `dev.enabled: false` (default) **no** dev commands are registered
-- `css_we_set` modifies only **in-process memory** — it does not alter `config.json` on disk
-- `Dev.AdminSteamIds` and `Dev.Enabled` are **never updated** by `css_we_reload_config`
+- `css_set` modifies only **in-process memory** — it does not alter `config.json` on disk
+- `Dev.AdminSteamIds` and `Dev.Enabled` are **never updated** by `css_reload`
   (require `make apply-config` or `docker compose restart cs2-server` — prevents privilege escalation)
 - The admin panel has **no authentication** — keep port 8081 bound to localhost only
 

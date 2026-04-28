@@ -65,7 +65,7 @@ make status
 To generate `admin-auth.json` from the host:
 
 ```bash
-python3 generate_admin_auth.py --username admin --write admin-auth.json
+python3 generate_admin_auth.py --write admin-auth.json
 ```
 
 Or use the Make target:
@@ -77,7 +77,7 @@ make admin-auth
 If the admin panel is served through HTTPS, use:
 
 ```bash
-python3 generate_admin_auth.py --username admin --cookie-secure --write admin-auth.json
+python3 generate_admin_auth.py --cookie-secure --write admin-auth.json
 ```
 
 Or with `make`:
@@ -340,9 +340,13 @@ changes: edit the file and run `make apply-config` (or use the admin panel at
 
 | Command | Who | Description |
 |---|---|---|
-| `!top` / `css_top` | Everyone | Shows TOP 10 leaderboard |
-| `!rank` / `css_rank` | Everyone | Shows your personal rank |
-| `css_walleye_status` | Admin | Plugin status (phase, players, match counter) |
+| `!top` | Everyone | Shows TOP 10 leaderboard |
+| `!rank` | Everyone | Shows your personal rank |
+| `!state` | Admin | Plugin status (phase, players, match counter) |
+
+In chat, commands use `!` or `/` and are silent. From the server console, use
+the same command without `!` and with the `css_` prefix, for example
+`!rank` in chat becomes `css_rank` in console.
 
 Dev commands (require `dev.enabled: true` and your SteamID64 in `admin_steam_ids`):
 see [ADMIN_GUIDE.md](ADMIN_GUIDE.md).
@@ -385,8 +389,9 @@ Authentication notes:
 
 | File | Contents |
 |---|---|
-| `players.json` | Cumulative scores and statistics per SteamID64 |
-| `matches.json` | History of closed matches with reports and cheater list |
+| `players.json` | Cumulative scores and statistics keyed by nickname; each record keeps SteamID metadata |
+| `player_index.json` | SteamID ↔ nickname lookup used by replay parsing and migrations |
+| `matches.json` | History of closed matches with nickname-based reports and cheater list |
 | `match_counter.json` | Match counter written by the CS2 plugin on each cycle |
 | `cheat_history.json` | Per-player cheater count (used for anti-repetition weighting) |
 | `replays/*.dem` | SourceTV demo of each match |
