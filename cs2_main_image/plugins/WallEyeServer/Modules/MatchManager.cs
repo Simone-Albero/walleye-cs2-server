@@ -259,18 +259,31 @@ public class MatchManager
         {
             FreezeAllActivePlayers();
 
-            foreach (var p in GetActivePlayers())
-                p.PrintToCenterHtml(
-                    "<font color='#FFD700' size='22'><b>REPORT PHASE</b></font><br>" +
-                    $"<font color='#FFFFFF' size='14'>Vote window: {_cfg.Match.ReportDuration:F0}s</font>", 8);
-
             Chat("Report menu opens in {0}s. You have {1}s to vote.",
                 (int)_cfg.Ui.ReportMenuDelay, (int)_cfg.Match.ReportDuration);
 
             AddPhaseTimer(_cfg.Ui.ReportMenuDelay, () => _reportModule.OpenReportMenuForAll(_cheaterSteamIds));
 
+            // Live countdown in the center HUD, updated every second during the vote window.
+            var menuDelay    = _cfg.Ui.ReportMenuDelay;
+            var totalSeconds = (int)_cfg.Match.ReportDuration;
+            for (int i = 0; i <= totalSeconds; i++)
+            {
+                var secondsLeft = totalSeconds - i;
+                AddPhaseTimer(menuDelay + i, () =>
+                {
+                    // PrintToCenter uses a different HUD channel from CenterHtmlMenu — no conflict.
+                    var label = secondsLeft <= 10 ? $"!! VOTING — {secondsLeft}s !!" : $"VOTING — {secondsLeft}s left";
+                    foreach (var p in GetActivePlayers())
+                        p.PrintToCenter(label);
+                });
+            }
+
             AddPhaseTimer(_cfg.Ui.ReportMenuDelay + (_cfg.Match.ReportDuration / 2), () =>
                 Chat("{0}s left to vote!", (int)(_cfg.Match.ReportDuration / 2)));
+
+            AddPhaseTimer(_cfg.Ui.ReportMenuDelay + _cfg.Match.ReportDuration - 10, () =>
+                Chat("10 seconds left to vote!"));
 
             AddPhaseTimer(_cfg.Ui.ReportMenuDelay + _cfg.Match.ReportDuration, CloseReportPhase);
         });
@@ -301,6 +314,11 @@ public class MatchManager
 
         Chat("Match over! Voting opens shortly...");
         _log.Info("Report phase started.");
+
+        foreach (var p in GetActivePlayers())
+            p.PrintToCenterHtml(
+                "<font color='#FF6600' size='26'><b>MATCH OVER</b></font><br>" +
+                "<font color='#FFFFFF' size='15'>Voting phase opening shortly...</font>", 5);
 
         // Stop demo recording BEFORE mp_restartgame so the live match .dem is
         // finalized cleanly. If called after the restart, CS2 would close the

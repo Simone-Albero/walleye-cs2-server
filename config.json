@@ -30,8 +30,8 @@
     "web_leaderboard_port": 8080
   },
   "ui": {
-    "report_menu_open_delay_seconds": 3,
-    "cheater_popup_delay_seconds": 3,
+    "report_menu_open_delay_seconds": 6,
+    "cheater_popup_delay_seconds": 6,
     "chat_prefix": "[WallEye]"
   },
   "dev": {
