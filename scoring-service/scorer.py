@@ -104,8 +104,11 @@ def normalize_players(raw: dict) -> tuple[dict, dict]:
         if not isinstance(value, dict):
             continue
         steam_ids = value.get("steam_ids") if isinstance(value.get("steam_ids"), list) else []
-        steam_id = str(value.get("steam_id") or (key if key.isdigit() else "") or (steam_ids[0] if steam_ids else "") or "")
+        steam_id = _steam_id(value.get("steam_id") or (key if key.isdigit() else "") or (steam_ids[0] if steam_ids else ""))
         nickname = _canonical_nickname(index, value.get("nickname") or ("" if key.isdigit() else key), steam_id)
+        # Skip bot/corrupt entries (Unknown_nan, Unknown_unknown, etc.)
+        if nickname.startswith("Unknown_"):
+            continue
 
         record = players.setdefault(nickname, _base_player(nickname, steam_id))
         for field in ("total_points", "matches_played", "correct_reports", "wrong_reports",
@@ -123,7 +126,7 @@ def normalize_players(raw: dict) -> tuple[dict, dict]:
     return players, index
 
 def get_or_create_player(players: dict, index: dict, steam_id: str = "", nickname: str = "") -> tuple[str, dict]:
-    steam_id = str(steam_id or "")
+    steam_id = _steam_id(steam_id or "")
     nickname = _canonical_nickname(index, nickname or index.get("steam_to_nickname", {}).get(steam_id, ""), steam_id)
 
     if nickname not in players:
@@ -195,7 +198,8 @@ def _steam_id(value) -> str:
     value = str(value or "").strip()
     if value.endswith(".0"):
         value = value[:-2]
-    return value if value and value != "0" else ""
+    # "nan" appears when demoparser2 returns float NaN for bot xuids
+    return value if value and value not in ("0", "nan") else ""
 
 def _int_value(value, default: int = 0) -> int:
     try:
@@ -229,6 +233,8 @@ def parse_demo(demo_path: Path) -> Optional[dict]:
         info_columns = set(info_df.columns)
         log.info("Demo player_info columns: %s", sorted(info_columns))
         for _, row in info_df.iterrows():
+            if "is_bot" in info_columns and row.get("is_bot"):
+                continue
             sid = _steam_id(_first_present(row, (
                 "xuid", "steamid", "steam_id", "steamid64", "steam_id64"
             )))

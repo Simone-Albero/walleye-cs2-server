@@ -181,6 +181,12 @@ public class MatchManager
 
         Server.ExecuteCommand("mp_warmup_end");
         Chat("Match LIVE! Good luck!");
+
+        // Save to replays/ so the symlink → /data/replays picks it up.
+        var demoName = $"match_{_matchCounter:D3}";
+        Server.ExecuteCommand($"tv_record replays/{demoName}");
+        _log.Info($"Started demo recording: replays/{demoName}.dem");
+
         // ESP viewer slots are applied in OnRoundStart once round 1 is fully settled.
         // Safety net: if the native warmup timer fired EventRoundStart before EnterState(MatchRunning),
         // OnRoundStart would have skipped the ESP setup (state was still WarmupPhase).
@@ -293,6 +299,12 @@ public class MatchManager
         Chat("🏁 Match over! Voting opens shortly...");
         _log.Info("Report phase started.");
 
+        // Stop demo recording BEFORE mp_restartgame so the live match .dem is
+        // finalized cleanly. If called after the restart, CS2 would close the
+        // recording mid-game and subsequent matches would have no demo.
+        Server.ExecuteCommand("tv_stoprecord");
+        _log.Info("Stopped demo recording.");
+
         // Set warmup cvars BEFORE restart so they apply on the new round.
         Server.ExecuteCommand("mp_warmuptime 999");
         Server.ExecuteCommand("mp_warmup_pausetimer 1");
@@ -318,10 +330,6 @@ public class MatchManager
 
         AddPhaseTimer(_cfg.Match.RestartDelay, () =>
         {
-            // Stop the current demo before the restart creates a new one.
-            Server.ExecuteCommand("tv_stoprecord");
-            _log.Info("Stopped demo recording.");
-
             // Trigger backend scoring only when the next cycle begins, so demo
             // parsing never competes with the report phase.
             WritePendingMatchFile();
@@ -488,7 +496,7 @@ public class MatchManager
     private void OpenCheaterPopup(CCSPlayerController player)
     {
         var menu = WallEyeMenu.CreateInfo(_plugin, "YOU ARE THE CHEATER", [
-            "!9 to close"
+            "!9"
         ]);
         menu.ExitButton = false;
         WallEyeMenu.Open(_plugin, player, menu);
