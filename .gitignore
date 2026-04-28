@@ -1,6 +1,5 @@
 # Dati runtime
 data/
-cs2_main_image/admins.conf
 
 # Build artifacts plugin C#
 cs2_main_image/plugins/WallEyeServer/bin/

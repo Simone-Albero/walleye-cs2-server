@@ -45,17 +45,6 @@ check_deps() {
     fi
 }
 
-check_admins_conf() {
-    if [[ ! -f cs2_main_image/admins.conf ]]; then
-        warn "cs2_main_image/admins.conf not found — creating from template."
-        cp cs2_main_image/admins.conf.template cs2_main_image/admins.conf
-        warn "Edit cs2_main_image/admins.conf before starting the server:"
-        warn "  Format: <username> <steamid64>  (one line per admin)"
-        echo
-        read -rp "  Press ENTER to continue anyway, or Ctrl+C to abort and edit first: "
-    fi
-}
-
 check_config() {
     if [[ ! -f config.json ]]; then
         error "config.json not found. Cannot start."
@@ -158,7 +147,6 @@ do_start() {
     local rebuild="${1:-false}"
 
     check_deps
-    check_admins_conf
     check_config
     ensure_volumes
 

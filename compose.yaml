@@ -87,7 +87,6 @@ services:
       - ./data:/data
       - ./config.json:/config/config.json:rw
       - ./admin-auth.json:/config/admin-auth.json:ro
-      - ./cs2_main_image/admins.conf:/admins/admins.conf:rw
       - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
       test: ["CMD", "python", "-c",

@@ -71,7 +71,6 @@ public class WallEyeServer : BasePlugin
 
     private MatchManager      _matchManager      = null!;
     private ReportModule      _reportModule      = null!;
-    private RulesModule       _rulesModule       = null!;
     private DevModule         _devModule         = null!;
     private EspModule         _espModule         = null!;
     private WallEyeLog        _log               = null!;
@@ -84,13 +83,13 @@ public class WallEyeServer : BasePlugin
         _log.Info($"Loading WallEyeServer {ModuleVersion} (hotReload={hotReload})");
 
         _reportModule      = new ReportModule(this, dataPath, cfg);
-        _rulesModule       = new RulesModule(this, cfg);
+        var rulesModule    = new RulesModule(this, cfg);
         _espModule         = new EspModule(this, dataPath);
         _matchManager      = new MatchManager(this, dataPath, cfg);
         _devModule         = new DevModule(this, cfg, _matchManager, _reportModule);
 
         _reportModule.Initialize();
-        _rulesModule.Initialize();
+        rulesModule.Initialize();
         _espModule.Initialize();
         _matchManager.Initialize(_reportModule, _espModule);
         _devModule.Initialize();

@@ -449,6 +449,28 @@ public class MatchManager
     /// <summary>Force the dev-selected phase, regardless of the current phase.</summary>
     public bool ForcePhase(MatchState target)
     {
+        // Guard 1: leaving MatchRunning via any path other than the normal
+        // StartReportPhase() flow — stop the active demo recording and advance
+        // the match counter so the next match gets a unique demo filename.
+        if (_state == MatchState.MatchRunning && target != MatchState.ReportPhase)
+        {
+            Server.ExecuteCommand("tv_stoprecord");
+            _log.Info("Demo recording stopped by dev phase skip.");
+            _matchCounter++;
+            SaveMatchCounter();
+            _log.Info($"Match counter advanced to {_matchCounter} (dev phase skip from MatchRunning).");
+        }
+
+        // Guard 2: leaving ReportPhase without CloseReportPhase() running —
+        // the recording was already stopped by StartReportPhase(), but the
+        // counter bump that normally happens in CloseReportPhase() was skipped.
+        if (_state == MatchState.ReportPhase && target != MatchState.ReportPhase)
+        {
+            _matchCounter++;
+            SaveMatchCounter();
+            _log.Info($"Match counter advanced to {_matchCounter} (dev phase skip from ReportPhase).");
+        }
+
         switch (target)
         {
             case MatchState.WaitingForPlayers:

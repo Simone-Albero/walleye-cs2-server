@@ -23,7 +23,6 @@ SHELL ["/bin/bash", "-c"]
 COPY setup.sh       /home/steam/
 COPY autoexec.cfg   /home/steam/
 COPY server.cfg     /home/steam/
-COPY admins.conf    /home/steam/
 
 USER root
 RUN apt update && \

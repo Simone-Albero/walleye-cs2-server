@@ -76,24 +76,16 @@ echo "[WallEye] CounterStrikeSharp chat commands are silent for ! and /."
 cp /home/steam/autoexec.cfg "$CFG_DIR/"
 cp /home/steam/server.cfg   "$CFG_DIR/"
 
-# Generate admins.json from admins.conf
-# Uses jq to build the JSON incrementally, correctly handling:
-#   - blank lines (skipped)
-#   - comment lines starting with # (skipped)
-#   - files with or without a trailing newline
-ADMINS_CONF=/home/steam/admins.conf
+# Generate admins.json from config.json (dev.admin_steam_ids)
 ADMINS_DATA="{}"
-while IFS= read -r line || [[ -n "$line" ]]; do
-    # Strip leading whitespace
-    line="${line#"${line%%[![:space:]]*}"}"
-    # Skip blank lines and comments
-    [[ -z "$line" || "${line:0:1}" == "#" ]] && continue
-    read -r -a parts <<< "$line"
-    [[ ${#parts[@]} -lt 2 ]] && continue
+while IFS= read -r steamid; do
+    steamid="${steamid#"${steamid%%[![:space:]]*}"}"
+    steamid="${steamid%"${steamid##*[![:space:]]}"}"
+    [[ -z "$steamid" ]] && continue
     ADMINS_DATA=$(printf '%s' "$ADMINS_DATA" | jq \
-        --arg u "${parts[0]}" --arg s "${parts[1]}" \
-        '.[$u] = {"identity": $s, "flags": ["@css/ban"]}')
-done < "$ADMINS_CONF"
+        --arg s "$steamid" \
+        '.[$s] = {"identity": $s, "flags": ["@css/ban"]}')
+done < <(jq -r '.dev.admin_steam_ids[]? // empty' /config/config.json 2>/dev/null)
 mkdir -p "$(dirname "$ADMINS_JSON")"
 printf '%s\n' "$ADMINS_DATA" > "$ADMINS_JSON"
 echo "[WallEye] Generated $(printf '%s' "$ADMINS_DATA" | jq 'keys | length') admin entries."

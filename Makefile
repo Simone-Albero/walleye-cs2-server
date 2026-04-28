@@ -33,7 +33,7 @@ help:
 	@echo "  WallEye CS2 Server"
 	@echo ""
 	@echo "  ── First time ────────────────────────────────────────────────────"
-	@echo "  make setup          Copy admins.conf template + validate config"
+	@echo "  make setup          Validate config"
 	@echo "  make admin-auth     Generate admin-auth.json interactively"
 	@echo "  make start          Build images, run cs2-base if needed, start everything"
 	@echo ""
@@ -64,11 +64,6 @@ help:
 
 # ── Setup (first-time helper) ─────────────────────────────────────────────────
 setup:
-	@if [[ ! -f cs2_main_image/admins.conf ]]; then \
-	    echo "[WallEye] Creating admins.conf from template..."; \
-	    cp cs2_main_image/admins.conf.template cs2_main_image/admins.conf; \
-	    echo "[WallEye] Edit cs2_main_image/admins.conf (format: <name> <steamid64>)"; \
-	fi
 	@echo "[WallEye] Validating config.json..."
 	@jq empty config.json && echo "[WallEye] config.json OK" \
 	    || (echo "[WallEye] ERROR: config.json is invalid JSON" && exit 1)

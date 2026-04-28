@@ -22,7 +22,6 @@ app.config.update(
 
 CONFIG_PATH = Path("/config/config.json")
 AUTH_CONFIG_PATH = Path("/config/admin-auth.json")
-ADMINS_PATH = Path("/admins/admins.conf")
 DATA_DIR    = Path("/data")
 
 MANAGED_SERVICES = ["cs2-server", "cs2-scorer", "cs2-web", "cs2-admin"]
@@ -352,23 +351,20 @@ def _validate_config(data: dict) -> str | None:
 # ── API: Admins ────────────────────────────────────────────────────────────────
 
 def _read_admins() -> list[dict]:
-    if not ADMINS_PATH.exists():
+    try:
+        with open(CONFIG_PATH, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except Exception:
         return []
-    admins = []
-    for line in ADMINS_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        parts = line.split(None, 1)
-        if len(parts) == 2:
-            admins.append({"username": parts[0], "steamid": parts[1]})
-        elif len(parts) == 1:
-            admins.append({"username": "", "steamid": parts[0]})
-    return admins
+    return [{"steamid": sid} for sid in cfg.get("dev", {}).get("admin_steam_ids", [])]
 
-def _write_admins(admins: list[dict]):
-    lines = [f"{a['username']} {a['steamid']}\n" for a in admins]
-    ADMINS_PATH.write_text("".join(lines), encoding="utf-8")
+def _write_admins(steamids: list[str]):
+    with open(CONFIG_PATH, encoding="utf-8") as f:
+        cfg = json.load(f)
+    cfg.setdefault("dev", {})["admin_steam_ids"] = steamids
+    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, indent=2)
+        f.write("\n")
 
 @app.route("/api/admins", methods=["GET"])
 def api_admins_get():
@@ -377,7 +373,6 @@ def api_admins_get():
 @app.route("/api/admins", methods=["POST"])
 def api_admins_post():
     data = request.get_json(force=True)
-    username = (data.get("username") or "").strip()
     steamid  = (data.get("steamid")  or "").strip()
 
     if not re.fullmatch(r"\d{17}", steamid):
@@ -387,8 +382,7 @@ def api_admins_post():
     if any(a["steamid"] == steamid for a in admins):
         return jsonify({"error": "SteamID already present"}), 409
 
-    admins.append({"username": username or steamid, "steamid": steamid})
-    _write_admins(admins)
+    _write_admins([a["steamid"] for a in admins] + [steamid])
     _restart_cs2_server()
     return jsonify({"ok": True})
 
@@ -397,10 +391,10 @@ def api_admins_delete(steamid):
     if not re.fullmatch(r"\d{17}", steamid):
         return jsonify({"error": "invalid SteamID"}), 422
     admins = _read_admins()
-    new_admins = [a for a in admins if a["steamid"] != steamid]
-    if len(new_admins) == len(admins):
+    new_ids = [a["steamid"] for a in admins if a["steamid"] != steamid]
+    if len(new_ids) == len(admins):
         return jsonify({"error": "not found"}), 404
-    _write_admins(new_admins)
+    _write_admins(new_ids)
     _restart_cs2_server()
     return jsonify({"ok": True})
 

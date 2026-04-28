@@ -321,9 +321,11 @@ public class DevModule
             _cfg.Scoring.PtsKill          = fresh.Scoring.PtsKill;
             _cfg.Scoring.PtsAssist        = fresh.Scoring.PtsAssist;
             _cfg.Scoring.PtsDeath         = fresh.Scoring.PtsDeath;
+            _cfg.Scoring.CheaterMaxPoints = fresh.Scoring.CheaterMaxPoints;
 
-            _cfg.Ui.ReportMenuDelay                = fresh.Ui.ReportMenuDelay;
-            _cfg.Ui.ChatPrefix                     = fresh.Ui.ChatPrefix;
+            _cfg.Ui.ReportMenuDelay       = fresh.Ui.ReportMenuDelay;
+            _cfg.Ui.CheaterPopupDelay     = fresh.Ui.CheaterPopupDelay;
+            _cfg.Ui.ChatPrefix            = fresh.Ui.ChatPrefix;
 
             _cfg.Dev.SkipPlayerCheck      = fresh.Dev.SkipPlayerCheck;
             // Dev.Enabled and Dev.AdminSteamIds are NOT updated (security — require restart)

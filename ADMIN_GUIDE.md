@@ -171,13 +171,12 @@ The popup stays open until closed with `!9`.
 | Key | Type | Description | Example |
 |---|---|---|---|
 | `required_players` | int | Players required to start | `css_set required_players 2` |
-| `wallhack_duration` | float | Wallhack phase duration (seconds) | `css_set wallhack_duration 30` |
+| `warmup_duration` | float | Warmup phase duration (seconds) | `css_set warmup_duration 30` |
 | `report_duration` | float | Report phase duration (seconds) | `css_set report_duration 20` |
 | `cheaters_count` | int | Number of cheaters to select | `css_set cheaters_count 2` |
 | `cheater_selection` | string | `per_team` = N per team, `global` = N from all players | `css_set cheater_selection global` |
 | `report_scope` | string | `all` = everyone, `enemy_team` = opposing team only | `css_set report_scope enemy_team` |
 | `restart_delay` | float | Pause before cycle restart (seconds) | `css_set restart_delay 0` |
-| `leaderboard_display` | float | In-game leaderboard display duration (seconds) | `css_set leaderboard_display 5` |
 | `skip_player_check` | bool | Ignore player count | `css_set skip_player_check true` |
 | `points_participation` | int | Points for participation | `css_set points_participation 5` |
 | `points_correct_report` | int | Points for a correct report | `css_set points_correct_report 50` |
@@ -196,10 +195,9 @@ The popup stays open until closed with `!9`.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `required_players` | int | 10 | Players needed to start the cycle |
-| `wallhack_duration_seconds` | float | 300 | Wallhack phase duration in seconds |
+| `warmup_duration_seconds` | float | 300 | Warmup phase duration in seconds |
 | `report_phase_duration_seconds` | float | 60 | Time to vote in the report menu |
 | `restart_delay_seconds` | float | 5 | Pause before automatic restart |
-| `leaderboard_display_seconds` | float | 10 | In-game leaderboard display duration |
 | `map` | string | "de_dust2" | Game map (applied on server restart) |
 | `max_rounds` | int | 30 | Number of rounds per match |
 | `cheaters_count` | int | 1 | Number of cheaters to select per match |
@@ -217,35 +215,23 @@ The popup stays open until closed with `!9`.
 | `points_kill` | int | 2 | Points per kill (from .dem replay) |
 | `points_assist` | int | 1 | Points per assist (from .dem replay) |
 | `points_death` | int | -1 | Points per death (from .dem replay) |
+| `cheater_max_points` | int | 50 | Max pts a cheater earns; scaled by `1 − detected_ratio` |
 
 ### `server`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `port` | int | 27015 | CS2 server UDP port |
-| `tv_port` | int | 27020 | SourceTV UDP port (replays) |
-| `web_leaderboard_port` | int | 8080 | Internal app setting. Host port publishing is still controlled by `compose.yaml` |
 | `server_name` | string | "WallEye CS2 Server" | Name visible in server browser |
 | `insecure` | bool | true | Disable VAC (`-insecure` launch flag) |
 | `autoupdate` | bool | true | Auto-update CS2 on server start (`-autoupdate` flag) |
-
-### `esp`
-
-| Field | Description |
-|---|---|
-| `cmd_enable_all` | Command to enable ESP for all (default: `css_esp_on`) |
-| `cmd_disable_all` | Command to disable ESP for all (default: `css_esp_off`) |
-| `cmd_enable_player` | Command to enable ESP for one player (`{name}` = name placeholder) |
-| `cmd_disable_player` | Command to disable ESP for one player |
 
 ### `ui`
 
 | Field | Type | Default | Description |
 |---|---|---|---|
-| `rules_display_seconds` | float | 15 | Duration of the rules overlay on connect |
-| `rules_delay_on_connect_seconds` | float | 3 | Delay before showing rules |
 | `report_menu_open_delay_seconds` | float | 3 | Delay before opening the report menu |
-| `wallhack_warning_before_end_seconds` | float | 60 | Advance warning before wallhack ends |
+| `cheater_popup_delay_seconds` | float | 5 | Delay before cheater popup (lets game overlay clear) |
 | `chat_prefix` | string | "[WallEye]" | Plugin chat message prefix |
 
 ### `dev`
@@ -281,16 +267,16 @@ revalidates `config.json`, then recreates `cs2-server`, `scoring-service`, `web-
 
 ```
 1. Connect to the server
-   → With skip_player_check: true the wallhack phase starts automatically on login
+   → With skip_player_check: true the warmup phase starts automatically on login
 
-2. Verify wallhack phase
-   → Chat: "[WallEye] Dev: skip_player_check active — starting wallhack immediately."
-   → ESP should be visible for all
-   → Check: css_status → state=WallhackPhase
+2. Verify warmup phase
+   → Chat: "[WallEye] Dev: skip_player_check active — starting warmup immediately."
+   → ESP should be visible for all players (glow through walls)
+   → Check: css_status → state=WarmupPhase
 
-3. End wallhack
+3. End warmup
    css_phase → Live match
-   → Chat: "Wallhack DISABLED. The real match starts now!"
+   → Chat: "Match LIVE! Good luck!"
    → If selected as cheater: ESP active only for you
 
 4. Verify cheater assignment
@@ -307,9 +293,8 @@ revalidates `config.json`, then recreates `cs2-server`, `scoring-service`, `web-
    Manual alternative: css_reports
 
 7. End report phase
-   css_phase → Leaderboard / next cycle
-   → TOP 10 leaderboard appears for leaderboard_display_seconds
-   → Cycle restarts automatically
+   css_phase → Waiting (next cycle)
+   → Cycle restarts automatically after restart_delay_seconds
 
 8. Verify scoring
    → Open http://<server-ip>:8081/stats and log in
@@ -320,9 +305,8 @@ revalidates `config.json`, then recreates `cs2-server`, `scoring-service`, `web-
 ### Quick config test
 
 ```
-css_set wallhack_duration 15
+css_set warmup_duration 15
 css_set report_duration 15
-css_set leaderboard_display 3
 css_set restart_delay 2
 css_status   ← verify the values
 ```
@@ -358,7 +342,7 @@ css_map de_inferno   ← changes map (server restarts on the new map)
 - `css_set` modifies only **in-process memory** — it does not alter `config.json` on disk
 - `Dev.AdminSteamIds` and `Dev.Enabled` are **never updated** by `css_reload`
   (require `make apply-config` or `docker compose restart cs2-server` — prevents privilege escalation)
-- The admin panel has **no authentication** — keep port 8081 bound to localhost only
+- The admin panel has **no authentication** — keep port 8081 bound to localhost only or behind a reverse proxy
 
 ---
 

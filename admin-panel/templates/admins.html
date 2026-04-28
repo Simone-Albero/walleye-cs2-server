@@ -20,11 +20,6 @@
 
     <div class="section-card-body">
       <form @submit.prevent="addAdmin" class="admin-form">
-        <div class="field admin-form-user">
-          <label class="field-label">Username</label>
-          <input type="text" v-model="newUsername" placeholder="nickname" maxlength="32">
-        </div>
-
         <div class="field admin-form-steamid">
           <label class="field-label">SteamID64</label>
           <input
@@ -56,14 +51,13 @@
       <table>
         <thead>
           <tr>
-            <th>Username</th>
             <th>SteamID64</th>
             <th class="r admin-actions-col">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="loading">
-            <td colspan="3">
+            <td colspan="2">
               <div class="table-loading">
                 <span class="spinner"></span>
                 Loading…
@@ -72,7 +66,7 @@
           </tr>
 
           <tr v-else-if="!admins.length">
-            <td colspan="3">
+            <td colspan="2">
               <div class="empty-state">
                 <div class="empty-icon">🛡</div>
                 No admins configured.
@@ -81,7 +75,6 @@
           </tr>
 
           <tr v-for="a in admins" :key="a.steamid">
-            <td>{{ a.username || '—' }}</td>
             <td><code>{{ a.steamid }}</code></td>
             <td class="r">
               <button class="btn btn-sm btn-danger" @click="removeAdmin(a)">Remove</button>
@@ -103,7 +96,6 @@ createApp({
   setup() {
     const admins      = ref([]);
     const loading     = ref(true);
-    const newUsername = ref('');
     const newSteamid  = ref('');
     const adding      = ref(false);
 
@@ -125,7 +117,6 @@ createApp({
 
       adding.value = true;
       const { ok, data } = await apiFetch('/api/admins', 'POST', {
-        username: newUsername.value.trim(),
         steamid: sid
       });
       adding.value = false;
@@ -133,14 +124,13 @@ createApp({
       toast(ok ? 'Admin added. Server restarting…' : (data.error || 'Error'), ok);
 
       if (ok) {
-        newUsername.value = '';
         newSteamid.value = '';
         await loadAdmins();
       }
     }
 
     async function removeAdmin(a) {
-      if (!confirm(`Remove admin ${a.username || a.steamid}?`)) return;
+      if (!confirm(`Remove admin ${a.steamid}?`)) return;
 
       const { ok, data } = await apiFetch('/api/admins/' + a.steamid, 'DELETE');
       toast(ok ? 'Admin removed. Server restarting…' : (data.error || 'Error'), ok);
@@ -153,7 +143,6 @@ createApp({
     return {
       admins,
       loading,
-      newUsername,
       newSteamid,
       adding,
       steamidInvalid,

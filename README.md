@@ -22,7 +22,7 @@ leaderboard.
 | Service | Container | Protocol | Default port | URL / notes |
 |---|---|---|---|---|
 | CS2 game server | `cs2-server` | UDP | **27015** | Connect via CS2: `connect <IP>:27015` |
-| SourceTV (GOTV / replays) | `cs2-server` | UDP | **27020** | CS2 GOTV spectate / demo recording |
+| SourceTV (GOTV / replays) | `cs2-server` | UDP | **27020** | Hardcoded in `autoexec.cfg`; not configurable via `config.json` |
 | Web leaderboard | `cs2-web` | TCP | **8080** | `http://<IP>:8080` — auto-refreshes every 10s |
 | Admin panel | `cs2-admin` | TCP | **8081** | `http://<IP>:8081` — login required, protect with a firewall or reverse proxy |
 
@@ -209,7 +209,7 @@ make shell        # Drop into a bash shell inside cs2-server
 ║   connects. As soon as count >= required_players the cycle starts.   ║
 ║   With dev.skip_player_check = true this phase is skipped entirely.  ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ Phase 2 — WallhackPhase  (duration: wallhack_duration_seconds)       ║
+║ Phase 2 — WarmupPhase  (duration: warmup_duration_seconds)           ║
 ║   • The cheater(s) are silently selected at this moment.             ║
 ║     Selection mode:                                                  ║
 ║       per_team — N cheaters per team (CT and T independently).       ║
@@ -217,17 +217,15 @@ make shell        # Drop into a bash shell inside cs2-server
 ║     Anti-repetition weighting: players who were cheaters recently    ║
 ║     have a lower probability of being selected again                 ║
 ║     (weight = 1 / (1 + times_as_cheater)).                           ║
-║   • Only the cheater(s) receive a private chat message.              ║
-║   • ESP is activated for ALL players (css_esp_on) so everyone can    ║
-║     observe suspicious movement equally.                             ║
-║   • warmup timer counts down wallhack_duration_seconds.              ║
-║   • Warning message sent wallhack_warning_before_end_seconds before  ║
-║     the phase ends (skipped if duration < warning threshold).        ║
+║   • Only the cheater(s) receive a private popup after the warmup     ║
+║     overlay clears (delay: cheater_popup_delay_seconds).             ║
+║   • All players see the glow ESP of every other player.              ║
+║   • warmup timer counts down warmup_duration_seconds.                ║
 ╠══════════════════════════════════════════════════════════════════════╣
 ║ Phase 3 — MatchRunning                                               ║
-║   • ESP disabled for everyone (css_esp_off).                         ║
-║   • Cheater(s) receive private ESP only for them via                 ║
-║     css_esp "<name>" true.                                           ║
+║   • ESP disabled for everyone.                                       ║
+║   • Cheater(s) receive private ESP only for them (glow through        ║
+║     walls via CheckTransmit filtering).                              ║
 ║   • mp_warmup_end fires and the real match begins.                   ║
 ║   • Match plays until mp_maxrounds are exhausted OR a team wins,     ║
 ║     which triggers EventCsWinPanelMatch.                             ║
@@ -256,17 +254,15 @@ make shell        # Drop into a bash shell inside cs2-server
 ║       + points_correct_report × N  (for each correctly IDed cheater) ║
 ║       + points_wrong_report × N    (for each wrongly reported player) ║
 ║       + points_no_cheater_correct  (if no cheater and no reports)    ║
+║       + cheater_max_points × (1 − detected_ratio) for each cheater   ║
 ║   • The latest .dem in /data/replays/ is parsed for K/D/A via        ║
 ║     demoparser2; demo score = kills×pts_kill + assists×pts_assist    ║
 ║     + deaths×pts_death. Applied only if demo not already processed.  ║
 ║   • players.json and matches.json updated atomically.                ║
 ║   • pending_match.json deleted.                                      ║
 ╠══════════════════════════════════════════════════════════════════════╣
-║ Phase 6 — LeaderboardDisplay + Restart                               ║
-║   • TOP 10 leaderboard shown in-game center HTML                     ║
-║     for leaderboard_display_seconds.                                 ║
-║   • After leaderboard_display + restart_delay seconds:               ║
-║     mp_restartgame 1 → back to Phase 1 (WaitingForPlayers).         ║
+║ Phase 6 — Restart                                                    ║
+║   • After restart_delay_seconds: mp_restartgame 1 → back to Phase 1.║
 ╚══════════════════════════════════════════════════════════════════════╝
 ```
 
@@ -283,10 +279,9 @@ changes: edit the file and run `make apply-config` (or use the admin panel at
 | Field | Default | Description |
 |---|---|---|
 | `required_players` | 10 | Players required to start the cycle |
-| `wallhack_duration_seconds` | 300 | Wallhack phase duration (seconds) |
+| `warmup_duration_seconds` | 300 | Warmup phase duration (seconds) |
 | `report_phase_duration_seconds` | 60 | Report phase duration (seconds) |
-| `restart_delay_seconds` | 5 | Pause after leaderboard before cycle restart |
-| `leaderboard_display_seconds` | 10 | In-game TOP 10 display duration |
+| `restart_delay_seconds` | 5 | Pause after report phase before cycle restart |
 | `map` | "de_dust2" | Map loaded on server restart |
 | `max_rounds` | 30 | Rounds per match |
 | `cheaters_count` | 1 | Cheaters assigned per match (per team if `per_team`) |
@@ -304,14 +299,13 @@ changes: edit the file and run `make apply-config` (or use the admin panel at
 | `points_kill` | 2 | Points per kill (from demo) |
 | `points_assist` | 1 | Points per assist (from demo) |
 | `points_death` | -1 | Points per death (from demo) |
+| `cheater_max_points` | 50 | Max points a cheater earns; scales down by detection rate |
 
 ### `server`
 
 | Field | Default | Description |
 |---|---|---|
 | `port` | 27015 | CS2 server UDP port |
-| `tv_port` | 27020 | SourceTV UDP port |
-| `web_leaderboard_port` | 8080 | Web leaderboard HTTP port |
 | `server_name` | "WallEye CS2 Server" | Name visible in server browser |
 | `insecure` | true | Disable VAC (required for private servers) |
 | `autoupdate` | true | Auto-update CS2 on server start |
@@ -320,10 +314,8 @@ changes: edit the file and run `make apply-config` (or use the admin panel at
 
 | Field | Default | Description |
 |---|---|---|
-| `rules_display_seconds` | 15 | Duration of the rules overlay on connect |
-| `rules_delay_on_connect_seconds` | 3 | Delay before showing rules |
 | `report_menu_open_delay_seconds` | 3 | Delay before opening the report menu |
-| `wallhack_warning_before_end_seconds` | 60 | Advance warning before wallhack ends |
+| `cheater_popup_delay_seconds` | 5 | Delay before the cheater popup appears (lets the game overlay clear first) |
 | `chat_prefix` | "[WallEye]" | Chat message prefix |
 
 ### `dev`
@@ -340,8 +332,6 @@ changes: edit the file and run `make apply-config` (or use the admin panel at
 
 | Command | Who | Description |
 |---|---|---|
-| `!top` | Everyone | Shows TOP 10 leaderboard |
-| `!rank` | Everyone | Shows your personal rank |
 | `!state` | Admin | Plugin status (phase, players, match counter) |
 
 In chat, commands use `!` or `/` and are silent. From the server console, use
@@ -380,8 +370,7 @@ Authentication notes:
 |---|---|---|
 | MetaMod:Source | 2.0.0-git1396 | Base framework for server plugins |
 | CounterStrikeSharp | 1.0.367 | C# plugin runtime for CS2 |
-| AdminESP (kgarri fork) | v1.0.2 | Command-controllable Wallhack/XRay |
-| WallEyeServer | 1.0.0 | Match cycle, reports, leaderboard, rules |
+| WallEyeServer | 1.0.0 | Match cycle, ESP (built-in), reports, scoring, rules |
 
 ---
 
