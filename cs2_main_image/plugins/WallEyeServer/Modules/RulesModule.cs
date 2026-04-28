@@ -37,32 +37,16 @@ public class RulesModule
         var player = @event.Userid;
         if (player == null || !player.IsValid || player.IsBot) return HookResult.Continue;
 
-        _plugin.AddTimer(_cfg.Ui.RulesDelay, () =>
-        {
-            if (player.IsValid)
-                ShowRules(player);
-        });
+        ShowRules(player);
 
         return HookResult.Continue;
     }
 
-    // Stagger plain chat lines across rules_display_seconds so they remain
-    // visible (and naturally fade) instead of all arriving in one frame.
     private void ShowRules(CCSPlayerController player)
     {
-        var total = Math.Max(1f, _cfg.Ui.RulesDisplay);
-        var step  = total / (RulesLines.Length + 1);
-
         player.PrintToChat($"{_cfg.Ui.ChatPrefix} — WALLEYE RULES —");
         _log.Info($"Showing rules to {player.PlayerName}.");
-        for (var i = 0; i < RulesLines.Length; i++)
-        {
-            var line = RulesLines[i];
-            _plugin.AddTimer(step * (i + 1), () =>
-            {
-                if (player.IsValid)
-                    player.PrintToChat($"{_cfg.Ui.ChatPrefix} {line}");
-            });
-        }
+        foreach (var line in RulesLines)
+            player.PrintToChat($"{_cfg.Ui.ChatPrefix} {line}");
     }
 }

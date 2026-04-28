@@ -211,7 +211,7 @@ public class DevModule
     private void OnOpenReports(CCSPlayerController? player, CommandInfo info)
     {
         if (!IsAdmin(player)) { Deny(player); return; }
-        _reportModule.OpenReportMenuForAll();
+        _reportModule.OpenReportMenuForAll(Array.Empty<ulong>());
         _log.Info($"Admin {(player?.PlayerName ?? "console")} opened report menu for all players.");
         Reply(player, "Report menu opened for all players.");
     }
@@ -274,12 +274,6 @@ public class DevModule
                 { message = "Float >= 0 required."; return false; }
                 _cfg.Match.RestartDelay = rsd; message = $"restart_delay_seconds = {rsd}"; return true;
 
-            case "leaderboard_display":
-                if (!float.TryParse(value, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out float ld) || ld < 0)
-                { message = "Float >= 0 required."; return false; }
-                _cfg.Match.LeaderboardDisplay = ld; message = $"leaderboard_display_seconds = {ld}"; return true;
-
             case "skip_player_check":
                 if (!bool.TryParse(value, out bool spc)) { message = "Valid values: true, false"; return false; }
                 _cfg.Dev.SkipPlayerCheck = spc; message = $"skip_player_check = {spc}"; return true;
@@ -314,7 +308,6 @@ public class DevModule
             _cfg.Match.WarmupDuration     = fresh.Match.WarmupDuration;
             _cfg.Match.ReportDuration     = fresh.Match.ReportDuration;
             _cfg.Match.RestartDelay       = fresh.Match.RestartDelay;
-            _cfg.Match.LeaderboardDisplay = fresh.Match.LeaderboardDisplay;
             _cfg.Match.Map                = fresh.Match.Map;
             _cfg.Match.MaxRounds          = fresh.Match.MaxRounds;
             _cfg.Match.CheatersCount      = fresh.Match.CheatersCount;
@@ -329,8 +322,6 @@ public class DevModule
             _cfg.Scoring.PtsAssist        = fresh.Scoring.PtsAssist;
             _cfg.Scoring.PtsDeath         = fresh.Scoring.PtsDeath;
 
-            _cfg.Ui.RulesDisplay                   = fresh.Ui.RulesDisplay;
-            _cfg.Ui.RulesDelay                     = fresh.Ui.RulesDelay;
             _cfg.Ui.ReportMenuDelay                = fresh.Ui.ReportMenuDelay;
             _cfg.Ui.ChatPrefix                     = fresh.Ui.ChatPrefix;
 

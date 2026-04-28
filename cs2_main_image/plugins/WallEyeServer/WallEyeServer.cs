@@ -23,7 +23,6 @@ public class MatchConfig
     [JsonPropertyName("warmup_duration_seconds")]       public float  WarmupDuration     { get; set; } = 300;
     [JsonPropertyName("report_phase_duration_seconds")] public float  ReportDuration     { get; set; } = 60;
     [JsonPropertyName("restart_delay_seconds")]         public float  RestartDelay       { get; set; } = 5;
-    [JsonPropertyName("leaderboard_display_seconds")]   public float  LeaderboardDisplay { get; set; } = 10;
     [JsonPropertyName("map")]                           public string Map                { get; set; } = "de_dust2";
     [JsonPropertyName("max_rounds")]                    public int    MaxRounds          { get; set; } = 30;
     [JsonPropertyName("cheaters_count")]                public int    CheatersCount      { get; set; } = 1;
@@ -40,6 +39,7 @@ public class ScoringConfig
     [JsonPropertyName("points_kill")]               public int PtsKill          { get; set; } = 2;
     [JsonPropertyName("points_assist")]             public int PtsAssist        { get; set; } = 1;
     [JsonPropertyName("points_death")]              public int PtsDeath         { get; set; } = -1;
+    [JsonPropertyName("cheater_max_points")]        public int CheaterMaxPoints { get; set; } = 50;
 }
 
 public class ServerConfig
@@ -49,9 +49,8 @@ public class ServerConfig
 
 public class UiConfig
 {
-    [JsonPropertyName("rules_display_seconds")]               public float  RulesDisplay                   { get; set; } = 15;
-    [JsonPropertyName("rules_delay_on_connect_seconds")]      public float  RulesDelay                     { get; set; } = 3;
     [JsonPropertyName("report_menu_open_delay_seconds")]      public float  ReportMenuDelay                { get; set; } = 3;
+    [JsonPropertyName("cheater_popup_delay_seconds")]         public float  CheaterPopupDelay              { get; set; } = 5;
     [JsonPropertyName("chat_prefix")] public string ChatPrefix { get; set; } = "[WallEye]";
 }
 
@@ -120,7 +119,6 @@ public class WallEyeServer : BasePlugin
         cfg.Match.WarmupDuration = Math.Max(1, cfg.Match.WarmupDuration);
         cfg.Match.ReportDuration = Math.Max(1, cfg.Match.ReportDuration);
         cfg.Match.RestartDelay = Math.Max(0, cfg.Match.RestartDelay);
-        cfg.Match.LeaderboardDisplay = Math.Max(0, cfg.Match.LeaderboardDisplay);
         cfg.Match.MaxRounds = Math.Max(1, cfg.Match.MaxRounds);
         cfg.Match.CheatersCount = Math.Max(0, cfg.Match.CheatersCount);
         cfg.Match.Map = string.IsNullOrWhiteSpace(cfg.Match.Map) ? "de_dust2" : cfg.Match.Map;
@@ -131,8 +129,6 @@ public class WallEyeServer : BasePlugin
         if (cfg.Match.ReportScope is not ("all" or "enemy_team"))
             cfg.Match.ReportScope = "all";
 
-        cfg.Ui.RulesDisplay = Math.Max(1, cfg.Ui.RulesDisplay);
-        cfg.Ui.RulesDelay = Math.Max(0, cfg.Ui.RulesDelay);
         cfg.Ui.ReportMenuDelay = Math.Max(0, cfg.Ui.ReportMenuDelay);
         cfg.Ui.ChatPrefix = string.IsNullOrWhiteSpace(cfg.Ui.ChatPrefix) ? "[WallEye]" : cfg.Ui.ChatPrefix;
     }

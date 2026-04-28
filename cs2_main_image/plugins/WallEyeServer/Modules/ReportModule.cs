@@ -14,6 +14,7 @@ public class ReportModule
     // SteamID reporter → list of reported SteamIDs
     private readonly Dictionary<ulong, List<ulong>> _currentReports = new();
     private readonly HashSet<ulong> _confirmedReports = new();
+    private HashSet<ulong> _cheaterSteamIds = new();
 
     public ReportModule(WallEyeServer plugin, string dataPath, WallEyeConfig cfg)
     {
@@ -32,8 +33,9 @@ public class ReportModule
     }
 
     /// <summary>Opens the report menu for ALL active players.</summary>
-    public void OpenReportMenuForAll()
+    public void OpenReportMenuForAll(IEnumerable<ulong> cheaterSteamIds)
     {
+        _cheaterSteamIds = new HashSet<ulong>(cheaterSteamIds);
         foreach (var p in GetActivePlayers()) OpenMenuForPlayer(p);
         _log.Info("Opened report menu for all active players.");
     }
@@ -52,6 +54,19 @@ public class ReportModule
     private void OpenMenuForPlayer(CCSPlayerController player)
     {
         if (!player.IsValid) return;
+
+        // If this player is the sole cheater, voting makes no sense for them:
+        // they cannot report themselves and would lose points for a wrong report.
+        if (player.AuthorizedSteamID != null &&
+            _cheaterSteamIds.Count == 1 &&
+            _cheaterSteamIds.Contains(player.AuthorizedSteamID.SteamId64))
+        {
+            var noVoteMenu = WallEyeMenu.CreateInfo(_plugin, "No vote needed", [
+                "You are the only cheater in the match."
+            ]);
+            WallEyeMenu.Open(_plugin, player, noVoteMenu, autoCloseSeconds: 20);
+            return;
+        }
 
         var allOthers = GetActivePlayers()
             .Where(p => p.AuthorizedSteamID != null && p != player)

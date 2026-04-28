@@ -172,12 +172,15 @@ public class MatchManager
         Server.ExecuteCommand("mp_winlimit 0");
         Server.ExecuteCommand("mp_match_can_clinch 0");
 
-        // Notify cheaters with a popup before the live round starts.
-        foreach (var p in GetActivePlayers())
+        // Notify cheaters with a popup after the game overlay clears.
+        var popupDelay = _cfg.Ui.CheaterPopupDelay;
+        var cheaterIds = new List<ulong>(_cheaterSteamIds);
+        AddPhaseTimer(popupDelay, () =>
         {
-            if (p.AuthorizedSteamID != null && _cheaterSteamIds.Contains(p.AuthorizedSteamID.SteamId64))
-                OpenCheaterPopup(p);
-        }
+            foreach (var p in GetActivePlayers())
+                if (p.AuthorizedSteamID != null && cheaterIds.Contains(p.AuthorizedSteamID.SteamId64))
+                    OpenCheaterPopup(p);
+        });
 
         Server.ExecuteCommand("mp_warmup_end");
         Chat("Match LIVE! Good luck!");
@@ -258,16 +261,16 @@ public class MatchManager
 
             foreach (var p in GetActivePlayers())
                 p.PrintToCenterHtml(
-                    "<font color='#FFD700' size='22'><b>🗳 REPORT PHASE</b></font><br>" +
+                    "<font color='#FFD700' size='22'><b>REPORT PHASE</b></font><br>" +
                     $"<font color='#FFFFFF' size='14'>Vote window: {_cfg.Match.ReportDuration:F0}s</font>", 8);
 
-            Chat("🗳 Report menu opens in {0}s. You have {1}s to vote.",
+            Chat("Report menu opens in {0}s. You have {1}s to vote.",
                 (int)_cfg.Ui.ReportMenuDelay, (int)_cfg.Match.ReportDuration);
 
-            AddPhaseTimer(_cfg.Ui.ReportMenuDelay, () => _reportModule.OpenReportMenuForAll());
+            AddPhaseTimer(_cfg.Ui.ReportMenuDelay, () => _reportModule.OpenReportMenuForAll(_cheaterSteamIds));
 
             AddPhaseTimer(_cfg.Ui.ReportMenuDelay + (_cfg.Match.ReportDuration / 2), () =>
-                Chat("⏳ {0}s left to vote!", (int)(_cfg.Match.ReportDuration / 2)));
+                Chat("{0}s left to vote!", (int)(_cfg.Match.ReportDuration / 2)));
 
             AddPhaseTimer(_cfg.Ui.ReportMenuDelay + _cfg.Match.ReportDuration, CloseReportPhase);
         });
@@ -296,7 +299,7 @@ public class MatchManager
         EnterState(MatchState.ReportPhase);
         _esp.DisableAll();
 
-        Chat("🏁 Match over! Voting opens shortly...");
+        Chat("Match over! Voting opens shortly...");
         _log.Info("Report phase started.");
 
         // Stop demo recording BEFORE mp_restartgame so the live match .dem is
@@ -325,7 +328,7 @@ public class MatchManager
         // Voting closed: give players control back before the next cycle starts.
         UnfreezeAllActivePlayers();
 
-        Chat("✅ Reports closed. Next match starts in {0}s...",
+        Chat("Reports closed. Next match starts in {0}s...",
             (int)_cfg.Match.RestartDelay);
 
         AddPhaseTimer(_cfg.Match.RestartDelay, () =>
@@ -496,10 +499,9 @@ public class MatchManager
     private void OpenCheaterPopup(CCSPlayerController player)
     {
         var menu = WallEyeMenu.CreateInfo(_plugin, "YOU ARE THE CHEATER", [
-            "!9"
+            "You have wallhack — use it wisely!",
         ]);
-        menu.ExitButton = false;
-        WallEyeMenu.Open(_plugin, player, menu);
+        WallEyeMenu.Open(_plugin, player, menu, autoCloseSeconds: 15);
     }
 
     // ── Dev-facing ESP accessors (used by DevModule) ──────────────────────────

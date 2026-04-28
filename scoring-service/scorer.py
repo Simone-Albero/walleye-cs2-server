@@ -35,6 +35,7 @@ PTS_NO_CHEATER_OK  = _scoring.get("points_no_cheater_correct", 30)
 PTS_KILL           = _scoring.get("points_kill",                2)
 PTS_ASSIST         = _scoring.get("points_assist",              1)
 PTS_DEATH          = _scoring.get("points_death",              -1)
+PTS_CHEATER_MAX    = _scoring.get("cheater_max_points",        50)
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -518,6 +519,26 @@ def process_pending_match(pending_path: Path):
                 "pts": gained,
             })
             log.info("  %s -> %s %+d", reporter_name, result, gained)
+
+        # Cheater scoring — points scale from cheater_max_points (undetected) to 0 (all players reported them)
+        if cheater_names and PTS_CHEATER_MAX > 0:
+            total_participants = len(participant_names)
+            for cheater_name in cheater_names:
+                if cheater_name not in players:
+                    continue
+                reporters_of_this_cheater = sum(
+                    1 for rs in report_summary
+                    if cheater_name in rs["suspected"]
+                )
+                if total_participants > 0:
+                    fraction_detected = reporters_of_this_cheater / total_participants
+                    cheater_pts = round(PTS_CHEATER_MAX * (1 - fraction_detected))
+                else:
+                    cheater_pts = PTS_CHEATER_MAX
+                players[cheater_name]["total_points"] += cheater_pts
+                match_scores[cheater_name] = match_scores.get(cheater_name, 0) + cheater_pts
+                log.info("  Cheater %s detected_by=%d/%d -> %+d pts",
+                         cheater_name, reporters_of_this_cheater, total_participants, cheater_pts)
 
         # Demo K/D/A is processed asynchronously by repair_unprocessed_match_demos().
         # This keeps match/report persistence independent from SourceTV flush timing.
