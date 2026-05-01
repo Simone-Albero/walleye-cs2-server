@@ -4,6 +4,26 @@ WallEye è una modalità custom di CS2 in cui **uno o più giocatori sono scelti
 
 ---
 
+## Connettersi al server
+
+### Server CS2
+Apri CS2, vai nella console (`~`) e digita:
+
+```
+connect 57.131.24.95:27015
+```
+
+Oppure usa **Play → Find Game → Community Server Browser** e cerca "WallEye".
+
+### Leaderboard
+La classifica aggiornata è disponibile all'indirizzo:
+
+```
+http://57.131.24.95:8080
+```
+
+---
+
 ## Comandi in chat
 
 In qualsiasi momento puoi digitare comandi in chat usando il prefisso `!`:
@@ -81,7 +101,7 @@ Chiusa la votazione, dopo pochi secondi parte un nuovo match con gli stessi gioc
 | Assist | **+2** |
 | Morte | **−2** |
 
-La classifica aggiornata è disponibile sulla **web leaderboard** del server.
+La classifica aggiornata è disponibile sulla **leaderboard** all'indirizzo `http://57.131.24.95:8080`.
 
 ---
 
@@ -91,3 +111,66 @@ La classifica aggiornata è disponibile sulla **web leaderboard** del server.
 - **Osserva gli angoli pre-aimati**: posizionarsi su un angolo prima ancora di sentire passi è un segnale forte.
 - **"No cheater" è una risposta valida**: a volte il cheater gioca talmente discretamente che è difficile distinguerlo. Votare "No cheater" correttamente vale quanto identificarlo.
 - **Conferma sempre il voto**: il menu rimane aperto ma il voto è registrato solo dopo aver premuto *Confirm selection*.
+
+---
+
+## Comandi admin (in-game)
+
+I comandi admin sono disponibili solo per i SteamID64 configurati in `config.json` con `dev.enabled: true`. Si digitano in chat con il prefisso `!` (o `/`).
+
+### Informazioni
+
+| Comando | Cosa fa |
+|---|---|
+| `!help` | Elenca tutti i comandi admin disponibili |
+| `!status` | Mostra la fase corrente, i giocatori connessi, i cheater attivi e i parametri principali |
+| `!players` | Lista dei giocatori connessi con SteamID64 e squadra (T/CT) |
+
+### Controllo delle fasi
+
+| Comando | Cosa fa |
+|---|---|
+| `!phase` | Apre un popup per saltare a una fase specifica: Attesa → Warmup → Match live → Votazione → Nuovo ciclo |
+
+Il popup si chiude con `!9`.
+
+### ESP / Wallhack
+
+| Comando | Cosa fa |
+|---|---|
+| `!xray` | Apre un popup per attivare/disattivare l'ESP su tutti i giocatori o su un singolo |
+| `!cheater <nome>` | Assegna il ruolo cheater (ESP attivo) a un giocatore specifico, in qualsiasi fase |
+
+### Votazione
+
+| Comando | Cosa fa |
+|---|---|
+| `!reports` | Apre manualmente il menu di votazione per tutti i giocatori |
+
+---
+
+### Parametri modificabili al volo con `!set`
+
+> Le modifiche con `!set` sono **temporanee** (solo in memoria) e si perdono al riavvio. Per renderle permanenti usa il pannello admin web o modifica `config.json`.
+
+| Chiave | Tipo | Descrizione | Esempio |
+|---|---|---|---|
+| `required_players` | numero | Giocatori richiesti per avviare il ciclo | `!set required_players 5` |
+| `max_rounds` | numero | Numero di round per match | `!set max_rounds 15` |
+| `warmup_duration` | secondi | Durata del warmup | `!set warmup_duration 30` |
+| `report_duration` | secondi | Tempo per votare nella fase di report | `!set report_duration 30` |
+| `cheaters_count` | numero | Quanti cheater selezionare per match | `!set cheaters_count 2` |
+| `cheater_selection` | testo | `global` = N tra tutti, `per_team` = N per squadra | `!set cheater_selection global` |
+| `report_scope` | testo | `enemy_team` = solo avversari, `all` = tutti | `!set report_scope all` |
+| `restart_delay` | secondi | Pausa prima del riavvio automatico del ciclo | `!set restart_delay 0` |
+| `skip_player_check` | true/false | Ignora il conteggio giocatori e parte subito | `!set skip_player_check true` |
+| `points_participation` | numero | Punti per partecipazione | `!set points_participation 10` |
+| `points_correct_report` | numero | Punti per report corretto | `!set points_correct_report 50` |
+| `points_wrong_report` | numero | Penalità per report errato (usa valore negativo) | `!set points_wrong_report -10` |
+
+### Altre utility
+
+| Comando | Cosa fa |
+|---|---|
+| `!reload` | Ricarica tutti i parametri da `config.json` su disco |
+| `!map <mappa>` | Cambia mappa immediatamente (es. `!map de_inferno`) |

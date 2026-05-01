@@ -354,6 +354,7 @@ public class MatchManager
             // Trigger backend scoring only when the next cycle begins, so demo
             // parsing never competes with the report phase.
             WritePendingMatchFile();
+            _plugin.AddTimer(10f, AnnouncePreviousMatchCheaters);
 
             _cheaterSteamIds.Clear();
             _matchCounter++;
@@ -763,6 +764,33 @@ public class MatchManager
     private static int GetPlayerCount() => PlayerLookup.ActivePlayerCount();
 
     public int GetEngineMaxRounds() => Math.Max(_cfg.Match.MaxRounds + EngineRoundLimitBuffer, 2);
+
+    private void AnnouncePreviousMatchCheaters()
+    {
+        var previousMatchId = $"match_{(_matchCounter - 1):D3}";
+        var path = Path.Combine(_dataPath, "matches.json");
+        if (!File.Exists(path)) return;
+
+        List<string> names;
+        try
+        {
+            var arr = JsonNode.Parse(File.ReadAllText(path))?["matches"]?[previousMatchId]?["cheaters"]?.AsArray();
+            if (arr == null) return;
+            names = arr.Select(n => n?.GetValue<string>() ?? "").Where(s => s != "").ToList();
+        }
+        catch (Exception e)
+        {
+            _log.Warn($"Could not read previous match cheaters: {e.Message}");
+            return;
+        }
+
+        if (names.Count == 0)
+            Chat("Previous match had no cheater.");
+        else if (names.Count == 1)
+            Chat("Previous match cheater: {0}.", names[0]);
+        else
+            Chat("Previous match cheaters: {0}.", string.Join(", ", names));
+    }
 
     private void Chat(string fmt, params object[] args) =>
         Server.PrintToChatAll($"{_cfg.Ui.ChatPrefix} {string.Format(fmt, args)}");

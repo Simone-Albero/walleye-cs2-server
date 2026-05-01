@@ -1,14 +1,14 @@
 {
   "_comment": "WallEye CS2 Server — single configuration entrypoint",
   "match": {
-    "required_players": 1,
-    "warmup_duration_seconds": 40,
+    "required_players": 6,
+    "warmup_duration_seconds": 60,
     "report_phase_duration_seconds": 60,
     "restart_delay_seconds": 5,
     "map": "de_dust2",
-    "max_rounds": 2,
+    "max_rounds": 11,
     "cheaters_count": 1,
-    "cheater_selection": "global",
+    "cheater_selection": "per_team",
     "report_scope": "enemy_team"
   },
   "scoring": {
@@ -39,7 +39,8 @@
     "skip_player_check": false,
     "admin_steam_ids": [
       "76561198107558378",
-      "76561199837006592"
+      "76561199837006592",
+      "76561198209381733"
     ]
   }
 }
