@@ -1,0 +1,13 @@
+[Unit]
+Description=WallEye CS2 Server — Daily restart timer (06:00 Europe/Rome)
+
+[Timer]
+# Fire every day at 06:00 in the Europe/Rome timezone.
+# systemd converts this to UTC automatically and handles DST transitions.
+OnCalendar=*-*-* 06:00:00 Europe/Rome
+# If the machine was off at the scheduled time, run as soon as it comes up.
+Persistent=true
+Unit=walleye-daily-restart.service
+
+[Install]
+WantedBy=timers.target

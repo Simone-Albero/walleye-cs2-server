@@ -10,7 +10,7 @@ SHELL := /bin/bash
 
 .PHONY: help setup admin-auth start up down stop build update rebuild restart \
 	apply-config logs logs-all admin-logs status shell \
-        reset-download clean
+        reset-download clean install-timer uninstall-timer
 
 START_SCRIPT := ./start.sh
 ADMIN_AUTH_SCRIPT := ./generate_admin_auth.py
@@ -60,8 +60,11 @@ help:
 	@echo "  make rebuild        Force full no-cache rebuild + restart"
 	@echo "  make reset-download Force CS2 re-download on next 'make start'"
 	@echo "  make clean          Force-remove stale containers"
+	@echo ""	@echo "  ── Daily restart timer ───────────────────────────────────────────"
+	@echo "  make install-timer  Install & enable the systemd daily restart timer (requires sudo)"
+	@echo "                      Default time: 06:00 Europe/Rome. Override: make install-timer TIMER_TIME=HH:MM"
+	@echo "  make uninstall-timer Disable & remove the systemd daily restart timer (requires sudo)"
 	@echo ""
-
 # ── Setup (first-time helper) ─────────────────────────────────────────────────
 setup:
 	@echo "[WallEye] Validating config.json..."
@@ -165,3 +168,30 @@ clean:
 	@$(COMPOSE) down --remove-orphans >/dev/null 2>&1 || true
 	@docker rm -f $(CONTAINERS) 2>/dev/null || true
 	@echo "[WallEye] Done. Run 'make start' to restart."
+
+# ── Daily restart timer ───────────────────────────────────────────────────────
+SYSTEMD_DIR := /etc/systemd/system
+TIMER_FILES  := walleye-daily-restart.service walleye-daily-restart.timer
+SCRIPT       := daily_restart.sh
+TIMER_TIME   ?= 06:00
+
+install-timer:
+	@echo "[WallEye] Installing systemd timer (restart at $(TIMER_TIME) Europe/Rome)..."
+	@chmod +x $(SCRIPT)
+	@sudo cp systemd/walleye-daily-restart.service $(SYSTEMD_DIR)/walleye-daily-restart.service
+	@sed "s|OnCalendar=.*|OnCalendar=*-*-* $(TIMER_TIME):00 Europe/Rome|" \
+	    systemd/walleye-daily-restart.timer \
+	    | sudo tee $(SYSTEMD_DIR)/walleye-daily-restart.timer > /dev/null
+	@sudo systemctl daemon-reload
+	@sudo systemctl enable --now walleye-daily-restart.timer
+	@echo "[WallEye] Timer installed and enabled."
+	@systemctl list-timers --no-pager walleye-daily-restart.timer
+
+uninstall-timer:
+	@echo "[WallEye] Removing systemd timer..."
+	@sudo systemctl disable --now walleye-daily-restart.timer 2>/dev/null || true
+	@for f in $(TIMER_FILES); do \
+	    sudo rm -f $(SYSTEMD_DIR)/$$f; \
+	done
+	@sudo systemctl daemon-reload
+	@echo "[WallEye] Timer removed."

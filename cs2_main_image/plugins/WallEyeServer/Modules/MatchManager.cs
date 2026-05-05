@@ -216,20 +216,46 @@ public class MatchManager
         _liveRoundsPlayed++;
         WriteStatusFile();
 
-        if (_liveRoundsPlayed < _cfg.Match.MaxRounds)
+        if (_liveRoundsPlayed >= _cfg.Match.MaxRounds)
         {
-            Chat("Round {0}/{1} completed.", _liveRoundsPlayed, _cfg.Match.MaxRounds);
-            _log.Info($"Round completed. round={_liveRoundsPlayed}/{_cfg.Match.MaxRounds}");
+            if (_matchEndQueued) return HookResult.Continue;
+            _matchEndQueued = true;
+            Chat("Match rounds completed. Opening report phase...");
+            _log.Info($"Max rounds reached. rounds={_liveRoundsPlayed}");
+            _esp.DisableAll();
+            AddPhaseTimer(0.5f, StartReportPhase);
             return HookResult.Continue;
         }
 
-        if (_matchEndQueued) return HookResult.Continue;
-        _matchEndQueued = true;
-        Chat("Match rounds completed. Opening report phase...");
-        _log.Info($"Max rounds reached. rounds={_liveRoundsPlayed}");
-        _esp.DisableAll();
-        AddPhaseTimer(0.5f, StartReportPhase);
+        // Defer clinch check to next frame so CS2 has updated CCSTeam.Score.
+        // Reading team entity scores (rather than tracking by side) handles the
+        // halftime side-swap correctly.
+        Server.NextFrame(CheckForClinch);
+
+        Chat("Round {0}/{1} completed.", _liveRoundsPlayed, _cfg.Match.MaxRounds);
+        _log.Info($"Round completed. round={_liveRoundsPlayed}/{_cfg.Match.MaxRounds}");
         return HookResult.Continue;
+    }
+
+    private void CheckForClinch()
+    {
+        if (_state != MatchState.MatchRunning || _matchEndQueued) return;
+
+        int winThreshold = (_cfg.Match.MaxRounds / 2) + 1;
+        var teams = Utilities.FindAllEntitiesByDesignerName<CCSTeam>("cs_team_manager");
+
+        foreach (var team in teams)
+        {
+            if (team.Score >= winThreshold)
+            {
+                _matchEndQueued = true;
+                Chat("Match clinched! Opening report phase...");
+                _log.Info($"Match clinched early. score={team.Score} threshold={winThreshold} rounds={_liveRoundsPlayed}");
+                _esp.DisableAll();
+                AddPhaseTimer(0.5f, StartReportPhase);
+                return;
+            }
+        }
     }
 
     private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)

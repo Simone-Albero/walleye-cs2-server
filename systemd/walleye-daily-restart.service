@@ -1,0 +1,15 @@
+[Unit]
+Description=WallEye CS2 Server — Daily archive & rebuild
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/cs2/walleye-cs2-server
+ExecStart=/home/ubuntu/cs2/walleye-cs2-server/daily_restart.sh
+StandardOutput=journal
+StandardError=journal
+
+# Give the rebuild enough time to complete (2 hours max).
+TimeoutStartSec=7200

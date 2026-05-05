@@ -2,14 +2,14 @@
   "_comment": "WallEye CS2 Server — single configuration entrypoint",
   "match": {
     "required_players": 6,
-    "warmup_duration_seconds": 60,
+    "warmup_duration_seconds": 180,
     "report_phase_duration_seconds": 60,
-    "restart_delay_seconds": 5,
+    "restart_delay_seconds": 30,
     "map": "de_dust2",
-    "max_rounds": 11,
+    "max_rounds": 12,
     "cheaters_count": 1,
     "cheater_selection": "per_team",
-    "report_scope": "enemy_team"
+    "report_scope": "all"
   },
   "scoring": {
     "points_participation": 5,
