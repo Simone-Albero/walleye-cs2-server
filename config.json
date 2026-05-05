@@ -3,7 +3,7 @@
   "match": {
     "required_players": 6,
     "warmup_duration_seconds": 180,
-    "report_phase_duration_seconds": 60,
+    "report_phase_duration_seconds": 10,
     "restart_delay_seconds": 30,
     "map": "de_dust2",
     "max_rounds": 12,
@@ -19,7 +19,8 @@
     "points_kill": 3,
     "points_assist": 2,
     "points_death": -2,
-    "cheater_max_points": 50
+    "cheater_max_points": 50,
+    "rarity_multiplier_max": 2.0
   },
   "server": {
     "port": 27015,

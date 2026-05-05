@@ -372,15 +372,44 @@ public class MatchManager
         // Voting closed: give players control back before the next cycle starts.
         UnfreezeAllActivePlayers();
 
+        // Snapshot names now while cheaters are still connected.
+        var cheaterNames = GetCurrentCheaterNames();
+
+        // Close all open menus — CenterHtmlMenu re-renders itself via PrintToCenterHtml
+        // and would overwrite the reveal popup immediately after it's shown.
+        foreach (var p in GetActivePlayers())
+            WallEyeMenu.Close(p);
+
         Chat("Reports closed. Next match starts in {0}s...",
             (int)_cfg.Match.RestartDelay);
+
+        string revealTitle;
+        IEnumerable<string> revealLines;
+        if (cheaterNames.Count == 0)
+        {
+            revealTitle = "NO CHEATER THIS MATCH";
+            revealLines = ["No one had wallhack this match."];
+        }
+        else if (cheaterNames.Count == 1)
+        {
+            revealTitle = "CHEATER REVEALED";
+            revealLines = [$"► {cheaterNames[0]}"];
+        }
+        else
+        {
+            revealTitle = "CHEATERS REVEALED";
+            revealLines = cheaterNames.Select(n => $"► {n}");
+        }
+
+        var revealMenu = WallEyeMenu.CreateInfo(_plugin, revealTitle, revealLines);
+        foreach (var p in GetActivePlayers())
+            WallEyeMenu.Open(_plugin, p, revealMenu, autoCloseSeconds: 20);
 
         AddPhaseTimer(_cfg.Match.RestartDelay, () =>
         {
             // Trigger backend scoring only when the next cycle begins, so demo
             // parsing never competes with the report phase.
             WritePendingMatchFile();
-            _plugin.AddTimer(10f, AnnouncePreviousMatchCheaters);
 
             _cheaterSteamIds.Clear();
             _matchCounter++;
@@ -791,32 +820,6 @@ public class MatchManager
 
     public int GetEngineMaxRounds() => Math.Max(_cfg.Match.MaxRounds + EngineRoundLimitBuffer, 2);
 
-    private void AnnouncePreviousMatchCheaters()
-    {
-        var previousMatchId = $"match_{(_matchCounter - 1):D3}";
-        var path = Path.Combine(_dataPath, "matches.json");
-        if (!File.Exists(path)) return;
-
-        List<string> names;
-        try
-        {
-            var arr = JsonNode.Parse(File.ReadAllText(path))?["matches"]?[previousMatchId]?["cheaters"]?.AsArray();
-            if (arr == null) return;
-            names = arr.Select(n => n?.GetValue<string>() ?? "").Where(s => s != "").ToList();
-        }
-        catch (Exception e)
-        {
-            _log.Warn($"Could not read previous match cheaters: {e.Message}");
-            return;
-        }
-
-        if (names.Count == 0)
-            Chat("Previous match had no cheater.");
-        else if (names.Count == 1)
-            Chat("Previous match cheater: {0}.", names[0]);
-        else
-            Chat("Previous match cheaters: {0}.", string.Join(", ", names));
-    }
 
     private void Chat(string fmt, params object[] args) =>
         Server.PrintToChatAll($"{_cfg.Ui.ChatPrefix} {string.Format(fmt, args)}");

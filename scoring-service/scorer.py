@@ -35,7 +35,8 @@ PTS_NO_CHEATER_OK  = _scoring.get("points_no_cheater_correct", 30)
 PTS_KILL           = _scoring.get("points_kill",                2)
 PTS_ASSIST         = _scoring.get("points_assist",              1)
 PTS_DEATH          = _scoring.get("points_death",              -1)
-PTS_CHEATER_MAX    = _scoring.get("cheater_max_points",        50)
+PTS_CHEATER_MAX        = _scoring.get("cheater_max_points",        50)
+RARITY_MULTIPLIER_MAX  = _scoring.get("rarity_multiplier_max",    2.0)
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -469,6 +470,27 @@ def process_pending_match(pending_path: Path):
             players[name]["total_points"] += PTS_PARTICIPATION
             match_scores[name] += PTS_PARTICIPATION
 
+        # Pre-pass: count how many distinct reporters identified each cheater.
+        # Used to compute the rarity multiplier before scoring individual reports.
+        total_participants = len(participant_names)
+        reporters_per_cheater: dict[str, int] = {name: 0 for name in cheater_names}
+        if cheater_names and total_participants > 0:
+            for rep in reports_raw:
+                suspected_tokens = rep.get("suspected_nicknames")
+                if suspected_tokens is None:
+                    suspected_tokens = rep.get("suspected_steam_ids", [])
+                for token in suspected_tokens:
+                    name = resolve_player_token(token, players, index)
+                    if name and name in cheater_names:
+                        reporters_per_cheater[name] += 1
+
+        def _rarity_mult(reporters_count: int) -> float:
+            """1.0 (all detected) … RARITY_MULTIPLIER_MAX (nobody detected)."""
+            if total_participants <= 0:
+                return 1.0
+            fraction = reporters_count / total_participants
+            return 1.0 + (RARITY_MULTIPLIER_MAX - 1.0) * (1.0 - fraction)
+
         for rep in reports_raw:
             reporter_name, p = get_or_create_player(
                 players,
@@ -500,7 +522,10 @@ def process_pending_match(pending_path: Path):
             else:
                 correct = suspected & cheater_names
                 wrong   = suspected - cheater_names
-                if correct: gained += PTS_CORRECT_REPORT * len(correct); p["correct_reports"] += len(correct)
+                if correct:
+                    for c in correct:
+                        gained += round(PTS_CORRECT_REPORT * _rarity_mult(reporters_per_cheater.get(c, 0)))
+                    p["correct_reports"] += len(correct)
                 if wrong:   gained += PTS_WRONG_REPORT   * len(wrong);   p["wrong_reports"]   += len(wrong)
                 if not suspected:
                     wrong = cheater_names
@@ -520,25 +545,20 @@ def process_pending_match(pending_path: Path):
             })
             log.info("  %s -> %s %+d", reporter_name, result, gained)
 
-        # Cheater scoring — points scale from cheater_max_points (undetected) to 0 (all players reported them)
+        # Cheater scoring — same rarity multiplier as reporter correct bonus:
+        # undetected → PTS_CHEATER_MAX * RARITY_MULTIPLIER_MAX,
+        # all detected → PTS_CHEATER_MAX * 1.0
         if cheater_names and PTS_CHEATER_MAX > 0:
-            total_participants = len(participant_names)
             for cheater_name in cheater_names:
                 if cheater_name not in players:
                     continue
-                reporters_of_this_cheater = sum(
-                    1 for rs in report_summary
-                    if cheater_name in rs["suspected"]
-                )
-                if total_participants > 0:
-                    fraction_detected = reporters_of_this_cheater / total_participants
-                    cheater_pts = round(PTS_CHEATER_MAX * (1 - fraction_detected))
-                else:
-                    cheater_pts = PTS_CHEATER_MAX
+                reporters_of_this_cheater = reporters_per_cheater.get(cheater_name, 0)
+                mult = _rarity_mult(reporters_of_this_cheater)
+                cheater_pts = round(PTS_CHEATER_MAX * mult)
                 players[cheater_name]["total_points"] += cheater_pts
                 match_scores[cheater_name] = match_scores.get(cheater_name, 0) + cheater_pts
-                log.info("  Cheater %s detected_by=%d/%d -> %+d pts",
-                         cheater_name, reporters_of_this_cheater, total_participants, cheater_pts)
+                log.info("  Cheater %s detected_by=%d/%d mult=%.2f -> %+d pts",
+                         cheater_name, reporters_of_this_cheater, total_participants, mult, cheater_pts)
 
         # Demo K/D/A is processed asynchronously by repair_unprocessed_match_demos().
         # This keeps match/report persistence independent from SourceTV flush timing.
