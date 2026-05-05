@@ -52,8 +52,8 @@
           </div>
 
           <div class="field">
-            <label class="field-label">Cheaters per Match (0–10)</label>
-            <input type="number" v-model.number="cfg.match.cheaters_count" min="0" max="10">
+            <label class="field-label">Max Cheaters per Group (0–10)</label>
+            <input type="number" v-model.number="cfg.match.max_cheaters_count" min="0" max="10">
           </div>
 
           <div class="field">
@@ -232,6 +232,14 @@
             </span>
             <span class="toggle-label-text">Skip player count check</span>
           </label>
+
+          <label class="toggle-wrap">
+            <span class="toggle">
+              <input type="checkbox" v-model="cfg.dev.show_cheater_debug">
+              <span class="toggle-slider"></span>
+            </span>
+            <span class="toggle-label-text">Show cheater selection in chat (debug)</span>
+          </label>
         </div>
 
         <div class="field">
@@ -264,11 +272,11 @@ const { createApp, ref, onMounted } = Vue;
 const MAPS = ['de_dust2','de_mirage','de_inferno','de_nuke','de_ancient','de_anubis','de_vertigo'];
 
 const defaultCfg = () => ({
-  match:   { required_players:10, warmup_duration_seconds:300, report_phase_duration_seconds:60, restart_delay_seconds:5, map:'de_dust2', max_rounds:30, cheaters_count:1, cheater_selection:'per_team', report_scope:'all' },
+  match:   { required_players:10, warmup_duration_seconds:300, report_phase_duration_seconds:60, restart_delay_seconds:5, map:'de_dust2', max_rounds:30, max_cheaters_count:1, cheater_selection:'per_team', report_scope:'all' },
   scoring: { points_participation:10, points_correct_report:30, points_wrong_report:-20, points_no_cheater_correct:30, points_kill:2, points_assist:1, points_death:-1, cheater_max_points:50 },
   server:  { port:27015, server_name:'WallEye CS2 Server', insecure:true, autoupdate:true },
   ui:      { report_menu_open_delay_seconds:3, cheater_popup_delay_seconds:5, warmup_warning_before_end_seconds:60, chat_prefix:'[WallEye]' },
-  dev:     { enabled:true, skip_player_check:true, admin_steam_ids:[] },
+  dev:     { enabled:true, skip_player_check:true, show_cheater_debug:false, admin_steam_ids:[] },
 });
 
 createApp({

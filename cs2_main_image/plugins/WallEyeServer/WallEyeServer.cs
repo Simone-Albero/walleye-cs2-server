@@ -25,7 +25,7 @@ public class MatchConfig
     [JsonPropertyName("restart_delay_seconds")]         public float  RestartDelay       { get; set; } = 5;
     [JsonPropertyName("map")]                           public string Map                { get; set; } = "de_dust2";
     [JsonPropertyName("max_rounds")]                    public int    MaxRounds          { get; set; } = 30;
-    [JsonPropertyName("cheaters_count")]                public int    CheatersCount      { get; set; } = 1;
+    [JsonPropertyName("max_cheaters_count")]            public int    MaxCheatersCount   { get; set; } = 1;
     [JsonPropertyName("cheater_selection")]             public string CheaterSelection    { get; set; } = "global";
     [JsonPropertyName("report_scope")]                  public string ReportScope        { get; set; } = "all";
 }
@@ -56,9 +56,10 @@ public class UiConfig
 
 public class DevConfig
 {
-    [JsonPropertyName("enabled")]           public bool         Enabled         { get; set; } = false;
-    [JsonPropertyName("admin_steam_ids")]   public List<string> AdminSteamIds   { get; set; } = new();
-    [JsonPropertyName("skip_player_check")] public bool         SkipPlayerCheck { get; set; } = false;
+    [JsonPropertyName("enabled")]             public bool         Enabled          { get; set; } = false;
+    [JsonPropertyName("admin_steam_ids")]     public List<string> AdminSteamIds    { get; set; } = new();
+    [JsonPropertyName("skip_player_check")]   public bool         SkipPlayerCheck  { get; set; } = false;
+    [JsonPropertyName("show_cheater_debug")]  public bool         ShowCheaterDebug { get; set; } = false;
 }
 
 // ── Plugin entry point ──────────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ public class WallEyeServer : BasePlugin
         cfg.Match.ReportDuration = Math.Max(1, cfg.Match.ReportDuration);
         cfg.Match.RestartDelay = Math.Max(0, cfg.Match.RestartDelay);
         cfg.Match.MaxRounds = Math.Max(1, cfg.Match.MaxRounds);
-        cfg.Match.CheatersCount = Math.Max(0, cfg.Match.CheatersCount);
+        cfg.Match.MaxCheatersCount = Math.Max(0, cfg.Match.MaxCheatersCount);
         cfg.Match.Map = string.IsNullOrWhiteSpace(cfg.Match.Map) ? "de_dust2" : cfg.Match.Map;
 
         if (cfg.Match.CheaterSelection is not ("global" or "per_team"))

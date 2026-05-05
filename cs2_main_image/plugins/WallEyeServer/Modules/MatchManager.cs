@@ -425,7 +425,7 @@ public class MatchManager
 
     private List<ulong> SelectCheaters()
     {
-        if (GetConfiguredCheaterCount() == 0) return [];
+        if (_cfg.Match.MaxCheatersCount == 0) return [];
 
         return _cfg.Match.CheaterSelection switch
         {
@@ -435,15 +435,24 @@ public class MatchManager
         };
     }
 
-    /// <summary>Selects CheatersCount cheaters from the global pool (all players).</summary>
+    /// <summary>Draws a random count in [0, MaxCheatersCount] for one group.</summary>
+    private int RollCheaterCount() => Random.Shared.Next(0, _cfg.Match.MaxCheatersCount + 1);
+
+    /// <summary>Selects a random number (0–MaxCheatersCount) of cheaters from the global pool.</summary>
     private List<ulong> SelectGlobal()
     {
         var allPlayers = GetActivePlayers().Where(p => p.AuthorizedSteamID != null).ToList();
         if (allPlayers.Count == 0) return [];
 
         var history    = LoadCheatHistory();
-        var count      = Math.Min(GetConfiguredCheaterCount(), allPlayers.Count);
-        var picked     = FairRandomSelect(allPlayers, history, count);
+        var count      = Math.Min(RollCheaterCount(), allPlayers.Count);
+
+        if (_cfg.Dev.ShowCheaterDebug)
+            Server.PrintToChatAll($"{_cfg.Ui.ChatPrefix} [Dev] Global cheater roll: {count}/{allPlayers.Count}");
+
+        if (count == 0) return [];
+
+        var picked      = FairRandomSelect(allPlayers, history, count);
         var selectedIds = picked.Select(p => p.AuthorizedSteamID!.SteamId64).ToList();
 
         foreach (var id in selectedIds)
@@ -456,7 +465,7 @@ public class MatchManager
         return selectedIds;
     }
 
-    /// <summary>Selects CheatersCount cheaters per team (CT and T separately). Falls back to global selection if no one is on a team.</summary>
+    /// <summary>Draws an independent random count per team (CT and T). Falls back to global if no team players.</summary>
     private List<ulong> SelectPerTeam()
     {
         var allPlayers = GetActivePlayers().Where(p => p.AuthorizedSteamID != null).ToList();
@@ -464,23 +473,36 @@ public class MatchManager
 
         var history  = LoadCheatHistory();
         var selected = new List<ulong>();
+        var debugParts = new List<string>();
 
         foreach (var teamNum in new[] { (byte)CsTeam.CounterTerrorist, (byte)CsTeam.Terrorist })
         {
             var teamPlayers = allPlayers.Where(p => p.TeamNum == teamNum).ToList();
             if (teamPlayers.Count == 0) continue;
 
-            var count  = Math.Min(GetConfiguredCheaterCount(), teamPlayers.Count);
+            var count  = Math.Min(RollCheaterCount(), teamPlayers.Count);
+            var label  = teamNum == (byte)CsTeam.CounterTerrorist ? "CT" : "T";
+            debugParts.Add($"{label}: {count}");
+
+            if (count == 0) continue;
             var picked = FairRandomSelect(teamPlayers, history, count);
             selected.AddRange(picked.Select(p => p.AuthorizedSteamID!.SteamId64));
         }
 
+        if (_cfg.Dev.ShowCheaterDebug && debugParts.Count > 0)
+            Server.PrintToChatAll($"{_cfg.Ui.ChatPrefix} [Dev] Cheater roll — {string.Join(" | ", debugParts)}");
+
         // Fallback: no players on any team (e.g. solo admin test) → global selection
-        if (selected.Count == 0)
+        if (selected.Count == 0 && debugParts.Count == 0)
         {
-            var count  = Math.Min(GetConfiguredCheaterCount(), allPlayers.Count);
-            var picked = FairRandomSelect(allPlayers, history, count);
-            selected.AddRange(picked.Select(p => p.AuthorizedSteamID!.SteamId64));
+            var count  = Math.Min(RollCheaterCount(), allPlayers.Count);
+            if (_cfg.Dev.ShowCheaterDebug)
+                Server.PrintToChatAll($"{_cfg.Ui.ChatPrefix} [Dev] Cheater roll (fallback global): {count}/{allPlayers.Count}");
+            if (count > 0)
+            {
+                var picked = FairRandomSelect(allPlayers, history, count);
+                selected.AddRange(picked.Select(p => p.AuthorizedSteamID!.SteamId64));
+            }
         }
 
         foreach (var id in selected)
@@ -492,8 +514,6 @@ public class MatchManager
         _log.Info($"Selected per-team cheaters count={selected.Count}");
         return selected;
     }
-
-    private int GetConfiguredCheaterCount() => Math.Max(0, _cfg.Match.CheatersCount);
 
     private static List<CCSPlayerController> FairRandomSelect(
         List<CCSPlayerController> players,
@@ -558,7 +578,8 @@ public class MatchManager
                 return true;
 
             case MatchState.MatchRunning:
-                if (_cheaterSteamIds.Count == 0) _cheaterSteamIds = SelectCheaters();
+                // Do NOT re-roll here: 0 cheaters is a valid outcome with max_cheaters_count.
+                // SelectCheaters() is already called at match start (line ~159).
                 EndWarmupPhase();
                 return true;
 

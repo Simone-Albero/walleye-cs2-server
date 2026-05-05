@@ -83,10 +83,11 @@ public class DevModule
             _matchManager.GetStatusString(),
             $"Cheaters: {(cheaterNames.Count > 0 ? string.Join(", ", cheaterNames) : "none")}",
             $"ReportScope={_cfg.Match.ReportScope}",
-            $"CheatersCount={_cfg.Match.CheatersCount}",
+            $"CheatersCount=0–{_cfg.Match.MaxCheatersCount}",
             $"Selection={_cfg.Match.CheaterSelection}",
             $"Map={_cfg.Match.Map}",
             $"SkipPlayerCheck={_cfg.Dev.SkipPlayerCheck}",
+            $"ShowCheaterDebug={_cfg.Dev.ShowCheaterDebug}",
             $"WarmupDuration={_cfg.Match.WarmupDuration}s"
         };
 
@@ -249,9 +250,9 @@ public class DevModule
                 { message = "Float >= 1 required."; return false; }
                 _cfg.Match.ReportDuration = rd; message = $"report_phase_duration_seconds = {rd}"; return true;
 
-            case "cheaters_count":
+            case "max_cheaters_count":
                 if (!int.TryParse(value, out int ct) || ct < 0) { message = "Integer >= 0 required."; return false; }
-                _cfg.Match.CheatersCount = ct; message = $"cheaters_count = {ct}"; return true;
+                _cfg.Match.MaxCheatersCount = ct; message = $"max_cheaters_count = {ct}"; return true;
 
             case "max_rounds":
                 if (!int.TryParse(value, out int mr) || mr < 1) { message = "Integer >= 1 required."; return false; }
@@ -277,6 +278,10 @@ public class DevModule
             case "skip_player_check":
                 if (!bool.TryParse(value, out bool spc)) { message = "Valid values: true, false"; return false; }
                 _cfg.Dev.SkipPlayerCheck = spc; message = $"skip_player_check = {spc}"; return true;
+
+            case "show_cheater_debug":
+                if (!bool.TryParse(value, out bool scd)) { message = "Valid values: true, false"; return false; }
+                _cfg.Dev.ShowCheaterDebug = scd; message = $"show_cheater_debug = {scd}"; return true;
 
             case "points_participation":
                 if (!int.TryParse(value, out int pp)) { message = "Integer required."; return false; }
@@ -310,7 +315,7 @@ public class DevModule
             _cfg.Match.RestartDelay       = fresh.Match.RestartDelay;
             _cfg.Match.Map                = fresh.Match.Map;
             _cfg.Match.MaxRounds          = fresh.Match.MaxRounds;
-            _cfg.Match.CheatersCount      = fresh.Match.CheatersCount;
+            _cfg.Match.MaxCheatersCount   = fresh.Match.MaxCheatersCount;
             _cfg.Match.CheaterSelection   = fresh.Match.CheaterSelection;
             _cfg.Match.ReportScope        = fresh.Match.ReportScope;
 
@@ -328,6 +333,7 @@ public class DevModule
             _cfg.Ui.ChatPrefix            = fresh.Ui.ChatPrefix;
 
             _cfg.Dev.SkipPlayerCheck      = fresh.Dev.SkipPlayerCheck;
+            _cfg.Dev.ShowCheaterDebug     = fresh.Dev.ShowCheaterDebug;
             // Dev.Enabled and Dev.AdminSteamIds are NOT updated (security — require restart)
 
             Server.ExecuteCommand($"mp_maxrounds {_matchManager.GetEngineMaxRounds()}");

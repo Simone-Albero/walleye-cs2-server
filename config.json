@@ -3,18 +3,18 @@
   "match": {
     "required_players": 6,
     "warmup_duration_seconds": 180,
-    "report_phase_duration_seconds": 10,
+    "report_phase_duration_seconds": 60,
     "restart_delay_seconds": 30,
     "map": "de_dust2",
     "max_rounds": 12,
-    "cheaters_count": 1,
+    "max_cheaters_count": 2,
     "cheater_selection": "per_team",
     "report_scope": "all"
   },
   "scoring": {
     "points_participation": 5,
     "points_correct_report": 30,
-    "points_wrong_report": -20,
+    "points_wrong_report": -15,
     "points_no_cheater_correct": 30,
     "points_kill": 3,
     "points_assist": 2,
@@ -38,6 +38,7 @@
   "dev": {
     "enabled": true,
     "skip_player_check": false,
+    "show_cheater_debug": true,
     "admin_steam_ids": [
       "76561198107558378",
       "76561199837006592",

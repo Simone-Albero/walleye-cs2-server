@@ -340,8 +340,8 @@ def _validate_config(data: dict) -> str | None:
     m = data.get("match", {})
     if not isinstance(m.get("required_players", 1), int) or not (1 <= m.get("required_players", 1) <= 20):
         return "required_players must be an integer between 1 and 20"
-    if not isinstance(m.get("cheaters_count", 1), int) or not (0 <= m.get("cheaters_count", 1) <= 10):
-        return "cheaters_count must be an integer between 0 and 10"
+    if not isinstance(m.get("max_cheaters_count", 1), int) or not (0 <= m.get("max_cheaters_count", 1) <= 10):
+        return "max_cheaters_count must be an integer between 0 and 10"
     if m.get("cheater_selection") not in (None, "per_team", "global"):
         return "cheater_selection must be 'per_team' or 'global'"
     if m.get("report_scope") not in (None, "all", "enemy_team"):
