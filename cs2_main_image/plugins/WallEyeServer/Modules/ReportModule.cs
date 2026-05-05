@@ -68,8 +68,8 @@ public class ReportModule
             return;
         }
 
-        var allOthers = GetActivePlayers()
-            .Where(p => p.AuthorizedSteamID != null && p != player)
+        var allOthers = PlayerLookup.ActivePlayersAndBots()
+            .Where(p => (p.AuthorizedSteamID != null || p.IsBot) && p != player)
             .ToList();
 
         // Filter by opposing team if report_scope = "enemy_team"
@@ -96,7 +96,7 @@ public class ReportModule
         else foreach (var suspect in others)
         {
             var s = suspect;
-            var suspectId = s.AuthorizedSteamID!.SteamId64;
+            var suspectId = PlayerLookup.PlayerId(s);
             var selected = selectedIds.Contains(suspectId);
             menu.AddMenuOption($"{(selected ? "[x]" : "[ ]")} {s.PlayerName}", (reporter, _) =>
             {
@@ -135,9 +135,9 @@ public class ReportModule
 
     private void ToggleReport(CCSPlayerController reporter, CCSPlayerController suspect)
     {
-        if (reporter.AuthorizedSteamID == null || suspect.AuthorizedSteamID == null) return;
+        if (reporter.AuthorizedSteamID == null) return;
         var rid = reporter.AuthorizedSteamID.SteamId64;
-        var sid = suspect.AuthorizedSteamID.SteamId64;
+        var sid = PlayerLookup.PlayerId(suspect);
         if (!_currentReports.ContainsKey(rid)) _currentReports[rid] = [];
         if (_currentReports[rid].Contains(sid))
         {
@@ -164,9 +164,9 @@ public class ReportModule
     /// <summary>Serializes reports to disk and resets for the next match.</summary>
     public void FlushReports(string matchId)
     {
-        var allPlayers = PlayerLookup.ActivePlayers()
-            .Where(p => p.AuthorizedSteamID != null)
-            .ToDictionary(p => p.AuthorizedSteamID!.SteamId64, p => p.PlayerName);
+        var allPlayers = PlayerLookup.ActivePlayersAndBots()
+            .Where(p => p.AuthorizedSteamID != null || p.IsBot)
+            .ToDictionary(p => PlayerLookup.PlayerId(p), p => p.PlayerName);
 
         var list = _currentReports
             .Where(kv => _confirmedReports.Contains(kv.Key))

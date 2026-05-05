@@ -38,7 +38,7 @@
   "dev": {
     "enabled": true,
     "skip_player_check": false,
-    "show_cheater_debug": true,
+    "show_cheater_debug": false,
     "admin_steam_ids": [
       "76561198107558378",
       "76561199837006592",

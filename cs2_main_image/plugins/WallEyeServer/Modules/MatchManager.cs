@@ -164,6 +164,10 @@ public class MatchManager
         _matchEndQueued = false;
 
         _esp.DisableAll();
+        // Enable health-based glow colour immediately so props built by the next-frame
+        // RebuildForAll already start with the correct colour (not the default team colour).
+        if (_cheaterSteamIds.Count > 0)
+            _esp.SetHealthBasedColor(true);
         // Keep the engine round limit above WallEye's limit so CS2 does not open its own
         // match result panel while WallEye needs report/leaderboard popups.
         Server.ExecuteCommand("mp_match_end_restart 0");
@@ -178,7 +182,7 @@ public class MatchManager
         AddPhaseTimer(popupDelay, () =>
         {
             foreach (var p in GetActivePlayers())
-                if (p.AuthorizedSteamID != null && cheaterIds.Contains(p.AuthorizedSteamID.SteamId64))
+                if (IsCheater(p))
                     OpenCheaterPopup(p);
         });
 
@@ -197,11 +201,11 @@ public class MatchManager
         AddPhaseTimer(2f, () =>
         {
             var cheaterSlots = GetActivePlayers()
-                .Where(p => p.AuthorizedSteamID != null &&
-                            _cheaterSteamIds.Contains(p.AuthorizedSteamID.SteamId64))
+                .Where(p => IsCheater(p))
                 .Select(p => p.Slot)
                 .ToList();
             _esp.SetViewerSlots(cheaterSlots);
+            _esp.SetHealthBasedColor(true);
             if (_esp.PropCount == 0) _esp.RebuildForAll();
             _log.Info($"ESP viewer slots applied (EndWarmupPhase fallback). slots=[{string.Join(",", cheaterSlots)}]");
         });
@@ -265,11 +269,12 @@ public class MatchManager
         // here we only (re)set which slots can see the glow.
         if (_state == MatchState.MatchRunning && _cheaterSteamIds.Count > 0)
         {
+            // Set the flag immediately so props rebuilt on the next frame already use health colours.
+            _esp.SetHealthBasedColor(true);
             AddPhaseTimer(1f, () =>
             {
                 var cheaterSlots = GetActivePlayers()
-                    .Where(p => p.AuthorizedSteamID != null &&
-                                _cheaterSteamIds.Contains(p.AuthorizedSteamID.SteamId64))
+                    .Where(p => IsCheater(p))
                     .Select(p => p.Slot);
                 _esp.SetViewerSlots(cheaterSlots);
             });
@@ -405,6 +410,25 @@ public class MatchManager
         foreach (var p in GetActivePlayers())
             WallEyeMenu.Open(_plugin, p, revealMenu, autoCloseSeconds: 20);
 
+        // ── Reveal ESP: show cheaters in red to everyone ──────────────────────
+        if (_cheaterSteamIds.Count > 0)
+        {
+            var cheaterSlots = GetSelectablePlayers()
+                .Where(p => IsCheater(p))
+                .Select(p => p.Slot)
+                .ToList();
+
+            var allSlots = GetActivePlayers()
+                .Select(p => p.Slot)
+                .ToList();
+
+            _esp.SetGlowColorOverride(System.Drawing.Color.Red);
+            _esp.SetTargetSlots(cheaterSlots);   // props only on cheaters
+            _esp.SetViewerSlots(allSlots);        // visible to everyone
+            _esp.RebuildForAll();
+            _log.Info($"Reveal ESP active. cheater_slots=[{string.Join(",", cheaterSlots)}]");
+        }
+
         AddPhaseTimer(_cfg.Match.RestartDelay, () =>
         {
             // Trigger backend scoring only when the next cycle begins, so demo
@@ -438,10 +462,19 @@ public class MatchManager
     /// <summary>Draws a random count in [0, MaxCheatersCount] for one group.</summary>
     private int RollCheaterCount() => Random.Shared.Next(0, _cfg.Match.MaxCheatersCount + 1);
 
+    /// <summary>Stable fake SteamId64 for bot players who have no AuthorizedSteamID.</summary>
+    private static ulong BotFakeId(int slot) => PlayerLookup.BotFakeId(slot);
+
+    /// <summary>Returns true if the player is in the current cheater list (handles both real players and bots).</summary>
+    private bool IsCheater(CCSPlayerController p) =>
+        p.AuthorizedSteamID != null
+            ? _cheaterSteamIds.Contains(p.AuthorizedSteamID.SteamId64)
+            : p.IsBot && _cheaterSteamIds.Contains(BotFakeId(p.Slot));
+
     /// <summary>Selects a random number (0–MaxCheatersCount) of cheaters from the global pool.</summary>
     private List<ulong> SelectGlobal()
     {
-        var allPlayers = GetActivePlayers().Where(p => p.AuthorizedSteamID != null).ToList();
+        var allPlayers = GetSelectablePlayers();
         if (allPlayers.Count == 0) return [];
 
         var history    = LoadCheatHistory();
@@ -453,11 +486,12 @@ public class MatchManager
         if (count == 0) return [];
 
         var picked      = FairRandomSelect(allPlayers, history, count);
-        var selectedIds = picked.Select(p => p.AuthorizedSteamID!.SteamId64).ToList();
+        var selectedIds = picked.Select(p => p.IsBot ? BotFakeId(p.Slot) : p.AuthorizedSteamID!.SteamId64).ToList();
 
-        foreach (var id in selectedIds)
+        foreach (var p in picked)
         {
-            var key = id.ToString();
+            if (p.IsBot) continue; // bots have no persistent history entry
+            var key = p.AuthorizedSteamID!.SteamId64.ToString();
             history[key] = history.TryGetValue(key, out var t) ? t + 1 : 1;
         }
         SaveCheatHistory(history);
@@ -468,11 +502,12 @@ public class MatchManager
     /// <summary>Draws an independent random count per team (CT and T). Falls back to global if no team players.</summary>
     private List<ulong> SelectPerTeam()
     {
-        var allPlayers = GetActivePlayers().Where(p => p.AuthorizedSteamID != null).ToList();
+        var allPlayers = GetSelectablePlayers();
         if (allPlayers.Count == 0) return [];
 
-        var history  = LoadCheatHistory();
-        var selected = new List<ulong>();
+        var history    = LoadCheatHistory();
+        var selected   = new List<ulong>();
+        var pickedAll  = new List<CCSPlayerController>();
         var debugParts = new List<string>();
 
         foreach (var teamNum in new[] { (byte)CsTeam.CounterTerrorist, (byte)CsTeam.Terrorist })
@@ -486,7 +521,8 @@ public class MatchManager
 
             if (count == 0) continue;
             var picked = FairRandomSelect(teamPlayers, history, count);
-            selected.AddRange(picked.Select(p => p.AuthorizedSteamID!.SteamId64));
+            selected.AddRange(picked.Select(p => p.IsBot ? BotFakeId(p.Slot) : p.AuthorizedSteamID!.SteamId64));
+            pickedAll.AddRange(picked);
         }
 
         if (_cfg.Dev.ShowCheaterDebug && debugParts.Count > 0)
@@ -501,13 +537,15 @@ public class MatchManager
             if (count > 0)
             {
                 var picked = FairRandomSelect(allPlayers, history, count);
-                selected.AddRange(picked.Select(p => p.AuthorizedSteamID!.SteamId64));
+                selected.AddRange(picked.Select(p => p.IsBot ? BotFakeId(p.Slot) : p.AuthorizedSteamID!.SteamId64));
+                pickedAll.AddRange(picked);
             }
         }
 
-        foreach (var id in selected)
+        foreach (var p in pickedAll)
         {
-            var key = id.ToString();
+            if (p.IsBot) continue; // bots have no persistent history entry
+            var key = p.AuthorizedSteamID!.SteamId64.ToString();
             history[key] = history.TryGetValue(key, out var t) ? t + 1 : 1;
         }
         SaveCheatHistory(history);
@@ -523,7 +561,10 @@ public class MatchManager
             .Select(player => new
             {
                 Player = player,
-                Times = history.TryGetValue(player.AuthorizedSteamID!.SteamId64.ToString(), out var times) ? times : 0,
+                // Bots have no SteamId64 in history — treat as 0 times selected so they
+                // are equally eligible as first-time real players.
+                Times = (!player.IsBot && player.AuthorizedSteamID != null &&
+                         history.TryGetValue(player.AuthorizedSteamID.SteamId64.ToString(), out var times)) ? times : 0,
                 Roll = Random.Shared.NextDouble()
             })
             .OrderBy(item => item.Times)
@@ -535,8 +576,8 @@ public class MatchManager
     // ── Metodi pubblici per DevModule ─────────────────────────────────────────
 
     public List<string> GetCurrentCheaterNames() =>
-        GetActivePlayers()
-            .Where(p => p.AuthorizedSteamID != null && _cheaterSteamIds.Contains(p.AuthorizedSteamID.SteamId64))
+        GetSelectablePlayers()
+            .Where(p => IsCheater(p))
             .Select(p => p.PlayerName)
             .ToList();
 
@@ -604,7 +645,7 @@ public class MatchManager
 
         // Rebuild viewer slots so the newly added cheater sees ESP immediately.
         var cheaterSlots = GetActivePlayers()
-            .Where(p => p.AuthorizedSteamID != null && _cheaterSteamIds.Contains(p.AuthorizedSteamID.SteamId64))
+            .Where(p => IsCheater(p))
             .Select(p => p.Slot);
         _esp.SetViewerSlots(cheaterSlots);
 
@@ -836,6 +877,10 @@ public class MatchManager
 
     private static List<CCSPlayerController> GetActivePlayers() =>
         PlayerLookup.ActivePlayers();
+
+    /// <summary>Like GetActivePlayers but includes bots — used only for cheater selection.</summary>
+    private static List<CCSPlayerController> GetSelectablePlayers() =>
+        PlayerLookup.ActivePlayersAndBots();
 
     private static int GetPlayerCount() => PlayerLookup.ActivePlayerCount();
 

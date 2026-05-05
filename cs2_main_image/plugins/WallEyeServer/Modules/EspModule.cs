@@ -31,6 +31,15 @@ public class EspModule
     // slots that are allowed to see the glow props (= cheater slots)
     private readonly HashSet<int> _viewerSlots = new();
 
+    // when non-empty, glow props are only built for players in this set (= cheater slots during reveal)
+    private readonly HashSet<int> _targetSlots = new();
+
+    // when non-null, overrides the per-team glow colour (used for the reveal phase)
+    private Color? _overrideGlowColor = null;
+
+    // when true, glow colour is updated every tick based on target player's health
+    private bool _healthBasedColor = false;
+
     // cached list for CheckTransmit — rebuilt whenever _glowProps changes
     private readonly List<(CBaseModelEntity Relay, CBaseModelEntity Glow)> _propList = new();
 
@@ -47,6 +56,7 @@ public class EspModule
         _plugin.RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
         _plugin.RegisterEventHandler<EventRoundStart>(OnRoundStart);
         _plugin.RegisterListener<Listeners.CheckTransmit>(OnCheckTransmit);
+        _plugin.RegisterListener<Listeners.OnTick>(UpdateHealthColors);
         _log.Info("Initialized.");
     }
 
@@ -60,10 +70,42 @@ public class EspModule
         _log.Info($"Viewer slots set: [{string.Join(",", _viewerSlots)}]");
     }
 
-    /// <summary>Stop all ESP: clear viewer slots and destroy all glow props.</summary>
+    /// <summary>
+    /// Restrict glow prop creation to the given slots only.
+    /// Pass an empty enumerable (or call with no targets) to build props for everyone (default).
+    /// </summary>
+    public void SetTargetSlots(IEnumerable<int> slots)
+    {
+        _targetSlots.Clear();
+        foreach (var s in slots) _targetSlots.Add(s);
+        _log.Info($"Target slots set: [{string.Join(",", _targetSlots)}]");
+    }
+
+    /// <summary>Override the glow colour for all props. Pass null to restore per-team colours.</summary>
+    public void SetGlowColorOverride(Color? color)
+    {
+        _overrideGlowColor = color;
+        _log.Info($"Glow colour override: {(color.HasValue ? color.Value.ToString() : "none")}");
+    }
+
+    /// <summary>
+    /// When enabled, the glow colour of each prop is updated every tick to reflect
+    /// the target player's current health: green (100 HP) → yellow (50 HP) → red (0 HP).
+    /// Has no effect if _overrideGlowColor is set.
+    /// </summary>
+    public void SetHealthBasedColor(bool enabled)
+    {
+        _healthBasedColor = enabled;
+        _log.Info($"Health-based glow colour: {enabled}");
+    }
+
+    /// <summary>Stop all ESP: clear viewer/target slots, colour override, and destroy all glow props.</summary>
     public void DisableAll()
     {
         _viewerSlots.Clear();
+        _targetSlots.Clear();
+        _overrideGlowColor = null;
+        _healthBasedColor  = false;
         DestroyAllProps();
         _log.Info("ESP disabled for all.");
     }
@@ -82,6 +124,57 @@ public class EspModule
 
     /// <summary>Returns the number of active glow prop pairs currently tracked.</summary>
     public int PropCount => _glowProps.Count;
+
+    // ── Tick: health-based colour update ─────────────────────────────────────
+
+    private void UpdateHealthColors()
+    {
+        // Skip if feature is off, overridden by a fixed colour, or no props exist.
+        if (!_healthBasedColor || _overrideGlowColor.HasValue || _glowProps.Count == 0) return;
+
+        foreach (var (slot, (_, glow)) in _glowProps)
+        {
+            if (!glow.IsValid) continue;
+
+            var player = Utilities.GetPlayerFromSlot(slot);
+            if (player == null || !player.IsValid || !player.PawnIsAlive) continue;
+
+            var pawn = player.PlayerPawn?.Value;
+            if (pawn == null || !pawn.IsValid) continue;
+
+            var newColor = HealthToColor(pawn.Health);
+            glow.Glow.GlowColorOverride = newColor;
+            // Always mark the network property dirty so the client receives
+            // the update every tick — ensures smooth, immediate colour transitions.
+            Utilities.SetStateChanged(glow, "CBaseModelEntity", "m_Glow");
+        }
+    }
+
+    /// <summary>
+    /// Maps HP to a colour along the green → yellow → red gradient.
+    ///   100 HP → green  (0, 255, 0)
+    ///    50 HP → yellow (255, 255, 0)
+    ///     0 HP → red    (255, 0, 0)
+    /// </summary>
+    private static Color HealthToColor(int hp)
+    {
+        hp = Math.Clamp(hp, 0, 100);
+
+        if (hp >= 50)
+        {
+            // Green → Yellow: increase red channel from 0 to 255
+            float t = (100 - hp) / 50f;   // 0 at 100 HP, 1 at 50 HP
+            int r = (int)(t * 255);
+            return Color.FromArgb(r, 255, 0);
+        }
+        else
+        {
+            // Yellow → Red: decrease green channel from 255 to 0
+            float t = hp / 50f;            // 1 at 50 HP, 0 at 0 HP
+            int g = (int)(t * 255);
+            return Color.FromArgb(255, g, 0);
+        }
+    }
 
     // ── Event handlers ────────────────────────────────────────────────────────
 
@@ -147,6 +240,9 @@ public class EspModule
     {
         if (player == null || !player.IsValid) return;
 
+        // If target slots are restricted, skip players not in the set.
+        if (_targetSlots.Count > 0 && !_targetSlots.Contains(player.Slot)) return;
+
         var pawn = player.PlayerPawn?.Value;
         if (pawn == null || !pawn.IsValid)
         {
@@ -192,9 +288,21 @@ public class EspModule
         glow.Spawnflags = 256u;
         glow.DispatchSpawn();
 
-        glow.Glow.GlowColorOverride = player.TeamNum == (byte)CsTeam.Terrorist
-            ? Color.Orange
-            : Color.SkyBlue;
+        // Prefer: fixed override → health-based (read current HP immediately) → team colour.
+        Color initialColor;
+        if (_overrideGlowColor.HasValue)
+        {
+            initialColor = _overrideGlowColor.Value;
+        }
+        else if (_healthBasedColor && player.PawnIsAlive && player.PlayerPawn?.Value is { IsValid: true } activePawn)
+        {
+            initialColor = HealthToColor(activePawn.Health);
+        }
+        else
+        {
+            initialColor = player.TeamNum == (byte)CsTeam.Terrorist ? Color.Orange : Color.SkyBlue;
+        }
+        glow.Glow.GlowColorOverride = initialColor;
         glow.Glow.GlowRange    = 5000;
         glow.Glow.GlowTeam     = -1;
         glow.Glow.GlowType     = 3;
